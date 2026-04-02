@@ -1,31 +1,21 @@
 # AGENTS
 
-## Goal
-- Build and maintain a Chrome extension that adds a ChatGPT "Copy Markdown" button and fixes math copy formatting.
+## 项目背景
+- 本项目是一个面向 `https://chatgpt.com/*` 的 Chrome 扩展。
+- 核心目标是在 ChatGPT 回复区域提供“复制 Markdown”能力。
+- 项目优先关注用户可感知结果，尤其是数学公式、代码块等内容的复制正确性。
 
-## Core Rules
-- Keep changes minimal, readable, and TypeScript-first.
-- Preserve the agreed MVP behavior unless the user asks to expand scope.
-- Do not remove or overwrite user-authored docs/plans.
-- Prefer stable selectors and resilient fallbacks for ChatGPT UI changes.
-- Use Chinese for comments/docstrings by default.
-- Keep content script orchestration thin; put reusable logic under `lib/`.
+## 功能分布
+- `entrypoints/`：扩展入口层，负责挂载内容脚本与背景脚本。
+- `lib/`：核心复用逻辑，包含 Markdown 处理和内容脚本相关 UI 能力。
+- `public/`：扩展静态资源，如图标。
+- `docs/architecture.md`：项目架构、模块职责与实现说明。
 
-## MVP Boundaries
-- Target host: `https://chatgpt.com/*`.
-- Primary success criterion: correct markdown for inline and block math.
-- Baseline strategy: generate markdown directly from assistant message DOM (`DOM-only`).
-- Math source of truth: KaTeX annotation nodes (`annotation[encoding="application/x-tex"]`).
-- Do not rely on runtime hook paths (`D$t` / webpack runtime / page-hook injection) unless user explicitly asks to re-enable research mode.
+## 工程约定
+- 修改代码后必须执行：`pnpm build`。
+- 新增或重写的函数/模块应补充 docstring，并遵循 JSDoc 规范。
+- 注释与 docstring 默认使用中文（如无特殊要求）。
 
-## Current Architecture
-- `entrypoints/content.ts`: observe page changes, inject button, orchestrate copy flow.
-- `lib/markdown.ts`: DOM -> Markdown serializer (including math handling).
-- `lib/content/markdown-button.ts`: button creation, state transitions, style injection.
-- `lib/content/tooltip.ts`: tooltip mount/reposition/unmount.
-- `lib/content/message-root.ts`: assistant message root resolution and debug logging.
-
-## UI Consistency Rules
-- Markdown button should reuse official action button style as much as possible.
-- Tooltip behavior should follow original UX (hover/focus mount, leave/blur unmount).
-- Icon assets should be independent files under `public/` and loaded via `chrome.runtime.getURL(...)`.
+## 维护说明
+- Agent 在必要时可以主动维护本文件，确保其与项目当前状态一致。
+- 具体实现、模块细节和架构说明应优先维护在 `docs/architecture.md`，避免在本文件中堆积过多细节。

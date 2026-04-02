@@ -37,8 +37,9 @@ pnpm run build     # 生产构建
 pnpm run zip       # 打包发布产物
 ```
 
-## 当前边界
+## 当前已验证的情况
 
-- 目标站点：`https://chatgpt.com/*`
-- 主要保证：数学公式、常见 Markdown 结构（标题/段落/列表/代码块/表格/引用）
-- 尚未针对 ChatGPT 专有卡片（sources/cards）做专门语法映射，暂按普通文本/链接降级
+- [x] 数学公式
+- [x] 代码段
+- [x] 表格
+- [x] 链接
