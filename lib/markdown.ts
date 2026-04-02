@@ -259,11 +259,177 @@ function serializeList(listEl: HTMLElement, ordered: boolean, indent: number): s
  * @returns {string}
  */
 function serializePreBlock(preEl: HTMLElement): string {
+  const language = extractPreBlockLanguage(preEl, preEl);
+  const codeMirrorText = extractCodeMirrorBlockText(preEl);
+  const structuredText = extractStructuredCodeBlockText(preEl);
   const codeEl = preEl.querySelector<HTMLElement>('code');
-  const codeText = normalizeCodeBlockText(codeEl?.textContent ?? preEl.textContent ?? '');
-  const language = extractCodeLanguage(codeEl ?? preEl);
+  const rawCodeText =
+    codeMirrorText ?? structuredText ?? codeEl?.textContent ?? preEl.innerText ?? preEl.textContent ?? '';
+  const codeText = stripDuplicatedLanguagePrefix(normalizeCodeBlockText(rawCodeText), language);
   const header = language ? `\`\`\`${language}` : '```';
   return `${header}\n${codeText}\n\`\`\``;
+}
+
+/**
+ * 从 ChatGPT 的 CodeMirror 结构提取代码文本。
+ *
+ * @param {HTMLElement} preEl pre 节点。
+ * @returns {string | null}
+ */
+function extractCodeMirrorBlockText(preEl: HTMLElement): string | null {
+  const cmContent = preEl.querySelector<HTMLElement>(
+    '#code-block-viewer .cm-content, [id="code-block-viewer"] .cm-content, .cm-editor .cm-content, .cm-content',
+  );
+  if (!cmContent) return null;
+
+  const parts: string[] = [];
+  collectCodeMirrorText(cmContent, parts);
+  const raw = parts.join('');
+  return raw ? raw : null;
+}
+
+/**
+ * 在选择器失效时，从结构化节点中兜底恢复代码文本（保留 <br> 换行）。
+ *
+ * @param {HTMLElement} preEl pre 节点。
+ * @returns {string | null}
+ */
+function extractStructuredCodeBlockText(preEl: HTMLElement): string | null {
+  const candidates = Array.from(
+    preEl.querySelectorAll<HTMLElement>('.cm-content, [class*="cm-content"], .cm-scroller, [id="code-block-viewer"]'),
+  );
+  if (candidates.length === 0) return null;
+
+  let best = '';
+  let bestScore = -1;
+
+  for (const candidate of candidates) {
+    const parts: string[] = [];
+    collectCodeMirrorText(candidate, parts);
+    const text = normalizeCodeBlockText(parts.join(''));
+    if (!text) continue;
+
+    const newlineCount = (text.match(/\n/g) ?? []).length;
+    const score = newlineCount * 1000 + text.length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = text;
+    }
+  }
+
+  return best || null;
+}
+
+/**
+ * 深度遍历 CodeMirror 节点并恢复文本换行。
+ *
+ * @param {ChildNode} node 当前节点。
+ * @param {string[]} parts 文本片段收集器。
+ * @returns {void}
+ */
+function collectCodeMirrorText(node: ChildNode, parts: string[]): void {
+  if (node.nodeType === Node.TEXT_NODE) {
+    parts.push(node.textContent ?? '');
+    return;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+  const el = node as HTMLElement;
+  const tag = el.tagName.toLowerCase();
+
+  if (tag === 'br') {
+    parts.push('\n');
+    return;
+  }
+
+  if (shouldSkipCodeBlockUiElement(el)) return;
+
+  for (const child of Array.from(el.childNodes)) {
+    collectCodeMirrorText(child, parts);
+  }
+}
+
+/**
+ * 过滤代码块内部的按钮/图标等 UI 节点。
+ *
+ * @param {HTMLElement} el 待判断元素。
+ * @returns {boolean}
+ */
+function shouldSkipCodeBlockUiElement(el: HTMLElement): boolean {
+  const tag = el.tagName.toLowerCase();
+  if (['button', 'svg', 'script', 'style'].includes(tag)) return true;
+  if (el.closest('button')) return true;
+  return false;
+}
+
+/**
+ * 提取 pre 代码块语言，优先读取 ChatGPT 代码块头部标签。
+ *
+ * @param {HTMLElement} preEl pre 节点。
+ * @param {HTMLElement} fallbackEl 回退节点（用于读取 language-* class）。
+ * @returns {string}
+ */
+function extractPreBlockLanguage(preEl: HTMLElement, fallbackEl: HTMLElement): string {
+  const headerLanguage = extractLanguageFromCodeBlockHeader(preEl);
+  const language = headerLanguage || extractCodeLanguage(fallbackEl);
+  return normalizeCodeFenceLanguage(language);
+}
+
+/**
+ * 从代码块头部读取语言文案（例如 C、Bash）。
+ *
+ * @param {HTMLElement} preEl pre 节点。
+ * @returns {string}
+ */
+function extractLanguageFromCodeBlockHeader(preEl: HTMLElement): string {
+  const copyButton = preEl.querySelector<HTMLButtonElement>(
+    'button[aria-label*="复制"], button[aria-label*="Copy"]',
+  );
+  if (!copyButton) return '';
+
+  const actionArea = copyButton.parentElement;
+  const headerRow = actionArea?.parentElement;
+  if (!headerRow) return '';
+
+  const siblingTextCandidates: string[] = [];
+  for (const child of Array.from(headerRow.children)) {
+    if (child.contains(copyButton)) continue;
+    const text = normalizeInlineText((child as HTMLElement).textContent ?? '').trim();
+    if (text) siblingTextCandidates.push(text);
+  }
+
+  if (siblingTextCandidates.length > 0) {
+    return siblingTextCandidates.sort((a, b) => b.length - a.length)[0];
+  }
+
+  return '';
+}
+
+/**
+ * 清理“语言标签被拼进代码正文开头”的异常情况。
+ *
+ * @param {string} codeText 代码正文。
+ * @param {string} language 语言标签。
+ * @returns {string}
+ */
+function stripDuplicatedLanguagePrefix(codeText: string, language: string): string {
+  if (!language || !codeText) return codeText;
+  if (!codeText.startsWith(language)) return codeText;
+
+  const next = codeText.slice(language.length, language.length + 1);
+  if (next && /[A-Za-z0-9_]/.test(next)) return codeText;
+  return codeText.slice(language.length).replace(/^\s*/, '');
+}
+
+/**
+ * 统一 fenced code 语言标签格式。
+ *
+ * @param {string} language 原始语言标签。
+ * @returns {string}
+ */
+function normalizeCodeFenceLanguage(language: string): string {
+  return normalizeInlineText(language).trim().toLowerCase();
 }
 
 /**
