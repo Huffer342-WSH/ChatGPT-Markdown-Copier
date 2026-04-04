@@ -1,0 +1,53 @@
+.md-copy-button {
+  position: relative;
+  transition: background-color .15s ease, color .15s ease, transform .12s ease;
+  color: var(--text-secondary, currentColor);
+}
+
+.md-copy-button .md-copy-icon-wrap {
+  position: relative;
+}
+
+.md-copy-button .md-copy-icon {
+  position: absolute;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity .14s ease, transform .14s ease;
+  color: inherit;
+}
+
+.md-copy-button .md-copy-icon-check {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.md-copy-button:hover,
+.md-copy-button:active {
+  background: var(--bg-secondary, rgb(232, 232, 232));
+}
+
+.md-copy-button[data-state="success"] .md-copy-icon-main {
+  opacity: 0;
+  transform: scale(0.82);
+}
+
+.md-copy-button[data-state="success"] .md-copy-icon-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.md-copy-button[data-state="loading"] {
+  opacity: 0.75;
+  animation: md-copy-pulse 0.9s ease-in-out infinite;
+}
+
+.md-copy-button[data-state="error"] {
+  color: #b91c1c;
+  background: rgba(185, 28, 28, .12);
+}
+
+@keyframes md-copy-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}

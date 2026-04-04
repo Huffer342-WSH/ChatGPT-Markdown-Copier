@@ -9,11 +9,5 @@ export default defineConfig({
     description: '__MSG_extDescription__',
     host_permissions: ['https://chatgpt.com/*'],
     permissions: ['clipboardWrite'],
-    web_accessible_resources: [
-      {
-        resources: ['md-copy-main.svg', 'md-copy-check.svg'],
-        matches: ['https://chatgpt.com/*'],
-      },
-    ],
   },
 });

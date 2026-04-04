@@ -5,17 +5,12 @@
 
 import { hideTooltip, refreshTooltipText, showTooltip } from './tooltip';
 import { t } from '../i18n';
+import markdownButtonStyles from './markdown-button.css?raw';
+import markdownButtonIconsSprite from './md-copy-icons.svg?raw';
 
 export type ButtonState = 'idle' | 'loading' | 'success' | 'error';
-
-const ICON_MAIN_URL =
-  (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome?.runtime?.getURL?.(
-    'md-copy-main.svg',
-  ) ?? '/md-copy-main.svg';
-const ICON_CHECK_URL =
-  (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome?.runtime?.getURL?.(
-    'md-copy-check.svg',
-  ) ?? '/md-copy-check.svg';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SPRITE_CONTAINER_ID = 'md-copy-icons-sprite';
 const BUTTON_TEXT_IDLE = '复制 Markdown';
 const BUTTON_TEXT_LOADING = '正在准备 Markdown';
 const BUTTON_TEXT_SUCCESS = 'Markdown 已复制';
@@ -80,7 +75,7 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
       if (button.dataset.state === 'success') {
         setButtonState(button, 'idle');
       }
-    }, 1200);
+    }, 2000);
     return;
   }
 
@@ -102,73 +97,60 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
  */
 export function installMarkdownButtonStyles(): void {
   if (document.getElementById('md-copy-extension-style')) return;
+  const styleHost = document.head ?? document.documentElement;
+  if (!styleHost) return;
 
   const style = document.createElement('style');
   style.id = 'md-copy-extension-style';
-  style.textContent = `
-    .md-copy-button {
-      position: relative;
-      transition: background-color .15s ease, color .15s ease, transform .12s ease;
-    }
-    .md-copy-button .md-copy-icon-wrap {
-      position: relative;
-    }
-    .md-copy-button .md-copy-icon {
-      position: absolute;
-      opacity: 1;
-      transform: scale(1);
-      transition: opacity .14s ease, transform .14s ease;
-    }
-    .md-copy-button .md-copy-icon-check {
-      opacity: 0;
-      transform: scale(0.85);
-    }
-    .md-copy-button:hover {
-      background: rgba(100, 116, 139, .14);
-      color: var(--text-primary, #111827);
-    }
-    .md-copy-button[data-state="success"] .md-copy-icon-main {
-      opacity: 0;
-      transform: scale(0.82);
-    }
-    .md-copy-button[data-state="success"] .md-copy-icon-check {
-      opacity: 1;
-      transform: scale(1);
-    }
-    .md-copy-button[data-state="loading"] {
-      opacity: 0.75;
-      animation: md-copy-pulse 0.9s ease-in-out infinite;
-    }
-    .md-copy-button[data-state="success"] {
-      color: #166534;
-      background: rgba(22, 101, 52, .12);
-    }
-    .md-copy-button[data-state="error"] {
-      color: #b91c1c;
-      background: rgba(185, 28, 28, .12);
-    }
-    @keyframes md-copy-pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(0.96); }
-      100% { transform: scale(1); }
-    }
-  `;
-  document.head.appendChild(style);
+  style.textContent = markdownButtonStyles;
+  styleHost.appendChild(style);
+  ensureSpriteInjected();
 }
 
 /**
  * 创建按钮图标。
  *
  * @param {boolean} isCheck 是否创建成功态勾选图标。
- * @returns {HTMLImageElement}
+ * @returns {SVGSVGElement}
  */
-function createIcon(isCheck: boolean): HTMLImageElement {
-  const img = document.createElement('img');
-  img.className = `md-copy-icon ${isCheck ? 'md-copy-icon-check' : 'md-copy-icon-main'}`;
-  img.width = 18;
-  img.height = 18;
-  img.alt = '';
-  img.setAttribute('aria-hidden', 'true');
-  img.src = isCheck ? ICON_CHECK_URL : ICON_MAIN_URL;
-  return img;
+function createIcon(isCheck: boolean): SVGSVGElement {
+  const symbolId = isCheck ? 'md-copy-check' : 'md-copy-main';
+  const spriteHref = `#${symbolId}`;
+  const icon = document.createElementNS(SVG_NS, 'svg');
+  icon.setAttribute('xmlns', SVG_NS);
+  icon.setAttribute('viewBox', '0 0 20 20');
+  icon.setAttribute('width', '18');
+  icon.setAttribute('height', '18');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.classList.add('icon', 'md-copy-icon', isCheck ? 'md-copy-icon-check' : 'md-copy-icon-main');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', spriteHref);
+  use.setAttribute('xlink:href', spriteHref);
+  icon.append(use);
+  return icon;
+}
+
+/**
+ * 注入 SVG sprite 定义，避免跨域 use 引用导致的安全限制。
+ *
+ * @returns {void}
+ */
+function ensureSpriteInjected(): void {
+  if (document.getElementById(SPRITE_CONTAINER_ID)) return;
+  const host = document.body ?? document.documentElement;
+  if (!host) return;
+
+  const temp = document.createElement('div');
+  temp.innerHTML = markdownButtonIconsSprite.trim();
+  const sprite = temp.firstElementChild;
+  if (!(sprite instanceof SVGSVGElement)) return;
+
+  sprite.id = SPRITE_CONTAINER_ID;
+  sprite.setAttribute('aria-hidden', 'true');
+  sprite.style.position = 'absolute';
+  sprite.style.width = '0';
+  sprite.style.height = '0';
+  sprite.style.overflow = 'hidden';
+  sprite.style.pointerEvents = 'none';
+  host.prepend(sprite);
 }

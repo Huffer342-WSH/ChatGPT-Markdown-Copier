@@ -13,6 +13,7 @@ export default defineContentScript({
   matches: ['https://chatgpt.com/*'],
   runAt: 'document_idle',
   main() {
+    if (!isSupportedDocument()) return;
     installMarkdownButtonStyles();
     installObserver();
     enhanceExistingButtons();
@@ -20,11 +21,23 @@ export default defineContentScript({
 });
 
 /**
+ * 判断当前文档是否为可注入的 ChatGPT HTML 页面。
+ *
+ * @returns {boolean} 仅在标准 HTML 文档返回 true。
+ */
+function isSupportedDocument(): boolean {
+  if (document.documentElement?.tagName !== 'HTML') return false;
+  if (!document.body) return false;
+  return document.contentType === 'text/html';
+}
+
+/**
  * 监听 DOM 变化，确保切换会话/新增回复后仍能注入按钮。
  *
  * @returns {void}
  */
 function installObserver(): void {
+  if (!document.body) return;
   const observer = new MutationObserver(() => {
     enhanceExistingButtons();
   });
