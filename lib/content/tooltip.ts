@@ -3,7 +3,7 @@
  * 负责在 hover/focus 时动态挂载提示层、计算定位，并在离开时清理。
  */
 
-import { t } from '../i18n';
+import { tWeb } from '../web-i18n';
 
 const TOOLTIP_OFFSET_PX = 8;
 const DEFAULT_TOOLTIP_TEXT = '复制 Markdown';
@@ -56,7 +56,7 @@ export function showTooltip(button: HTMLButtonElement, options: ShowTooltipOptio
 function mountTooltip(button: HTMLButtonElement): void {
   clearActiveTooltip();
 
-  const tooltipText = button.dataset.tooltip ?? t('mdCopyButtonIdle', DEFAULT_TOOLTIP_TEXT);
+  const tooltipText = button.dataset.tooltip ?? tWeb('mdCopyButtonIdle', DEFAULT_TOOLTIP_TEXT);
   const tooltipId = `md-copy-tooltip-${Math.random().toString(36).slice(2, 10)}`;
 
   const wrapper = document.createElement('div');

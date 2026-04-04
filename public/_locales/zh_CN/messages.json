@@ -6,25 +6,5 @@
   "extDescription": {
     "message": "为 ChatGPT 回复增加 Markdown 复制按钮",
     "description": "扩展描述"
-  },
-  "mdCopyButtonIdle": {
-    "message": "复制 Markdown",
-    "description": "Markdown 复制按钮默认文案"
-  },
-  "mdCopyButtonLoading": {
-    "message": "正在准备 Markdown",
-    "description": "准备复制时的无障碍标签"
-  },
-  "mdCopyButtonLoadingTooltip": {
-    "message": "正在准备 Markdown...",
-    "description": "准备复制时的 tooltip 文案"
-  },
-  "mdCopyButtonSuccess": {
-    "message": "Markdown 已复制",
-    "description": "复制成功后的按钮文案"
-  },
-  "mdCopyButtonError": {
-    "message": "复制失败，点击重试",
-    "description": "复制失败后的按钮文案"
   }
 }

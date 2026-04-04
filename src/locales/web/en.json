@@ -1,0 +1,7 @@
+{
+  "mdCopyButtonIdle": "Copy Markdown",
+  "mdCopyButtonLoading": "Preparing Markdown",
+  "mdCopyButtonLoadingTooltip": "Preparing Markdown...",
+  "mdCopyButtonSuccess": "Markdown copied",
+  "mdCopyButtonError": "Copy failed, click to retry"
+}

@@ -33,18 +33,24 @@ entrypoints/
 
 lib/
   markdown.ts             # DOM -> Markdown 序列化核心
-  i18n.ts                 # i18n 读取封装（chrome.i18n.getMessage + fallback）
+  i18n.ts                 # 扩展壳层 i18n 读取封装（chrome.i18n）
+  web-i18n.ts             # 页面注入文案 i18n（i18next + html lang）
   content/
     markdown-button.ts    # Markdown 按钮创建、状态管理、样式注入
     tooltip.ts            # tooltip 挂载、定位、销毁与文案刷新
     message-root.ts       # assistant 消息根节点定位与调试日志
 
+src/
+  locales/web/
+    en.json               # 页面注入文案（英文）
+    zh_CN.json            # 页面注入文案（简体中文）
+
 public/
   md-copy-main.svg        # 按钮默认图标
   md-copy-check.svg       # 按钮成功态图标
   _locales/
-  en/messages.json        # 英文文案
-  zh_CN/messages.json     # 简体中文文案
+    en/messages.json      # 扩展壳层文案（英文）
+    zh_CN/messages.json   # 扩展壳层文案（简体中文）
 
 assets/
   icon.png                # 扩展母图标（由 @wxt-dev/auto-icons 自动生成多尺寸图标）
@@ -124,11 +130,19 @@ docs/
 
 ### `lib/i18n.ts`
 
-负责统一读取扩展文案：
+负责扩展壳层（浏览器侧）文案读取：
 
 - 调用 `chrome.i18n.getMessage`
-- 在消息缺失时返回本地 fallback，避免按钮出现空文案
-- 为内容脚本层提供稳定的 `t(...)` 入口
+- 用于 `manifest` 与未来扩展页（popup/options）文案场景
+
+### `lib/web-i18n.ts`
+
+负责页面注入文案读取（与浏览器语言解耦）：
+
+- 使用 `i18next` 加载 `src/locales/web/*.json`
+- 从 `html[lang]` 解析语言，并强制 `changeLanguage(...)`
+- 当前映射规则：`zh-* => zh_CN`，其余回退 `en`
+- 支持监听 `html lang` 变化后实时刷新已注入按钮文案
 
 ### `entrypoints/background.ts`
 

@@ -1,0 +1,7 @@
+{
+  "mdCopyButtonIdle": "复制 Markdown",
+  "mdCopyButtonLoading": "正在准备 Markdown",
+  "mdCopyButtonLoadingTooltip": "正在准备 Markdown...",
+  "mdCopyButtonSuccess": "Markdown 已复制",
+  "mdCopyButtonError": "复制失败，点击重试"
+}

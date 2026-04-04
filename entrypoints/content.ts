@@ -3,22 +3,41 @@
  * 并串联“定位消息 -> DOM 序列化 -> 写入剪贴板”的主流程。
  */
 
-import { createMarkdownButton, installMarkdownButtonStyles, setButtonState } from '../lib/content/markdown-button';
+import {
+  createMarkdownButton,
+  installMarkdownButtonStyles,
+  refreshButtonLocale,
+  setButtonState,
+} from '../lib/content/markdown-button';
 import { findMessageRoot, isAssistantTurnButton, logMarkdownCopyDebugDom } from '../lib/content/message-root';
 import { serializeMessageDomToMarkdown } from '../lib/markdown';
+import { initWebI18n, syncWebLanguageFromHtml } from '../lib/web-i18n';
 
 const ENHANCED_ATTR = 'data-md-copy-enhanced';
+const MARKDOWN_BUTTON_SELECTOR = 'button.md-copy-button';
 
 export default defineContentScript({
   matches: ['https://chatgpt.com/*'],
   runAt: 'document_idle',
   main() {
-    if (!isSupportedDocument()) return;
-    installMarkdownButtonStyles();
-    installObserver();
-    enhanceExistingButtons();
+    void bootstrapContentScript();
   },
 });
+
+/**
+ * 内容脚本启动流程：
+ * 先初始化页面 i18n，再安装按钮能力与监听器。
+ *
+ * @returns {Promise<void>}
+ */
+async function bootstrapContentScript(): Promise<void> {
+  if (!isSupportedDocument()) return;
+  await initWebI18n();
+  installMarkdownButtonStyles();
+  installObserver();
+  installLangObserver();
+  enhanceExistingButtons();
+}
 
 /**
  * 判断当前文档是否为可注入的 ChatGPT HTML 页面。
@@ -45,6 +64,18 @@ function installObserver(): void {
 }
 
 /**
+ * 监听 html lang 变化，实时切换注入文案语言。
+ *
+ * @returns {void}
+ */
+function installLangObserver(): void {
+  const observer = new MutationObserver(() => {
+    void handleHtmlLangChanged();
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+}
+
+/**
  * 扫描官方复制按钮并在其旁边添加 Markdown 按钮。
  *
  * @returns {void}
@@ -63,6 +94,29 @@ function enhanceExistingButtons(): void {
       void handleMarkdownCopy(markdownButton, officialButton);
     });
     officialButton.insertAdjacentElement('afterend', markdownButton);
+  }
+}
+
+/**
+ * 页面语言变化后的处理：
+ * 同步 i18next 当前语言，并刷新已注入按钮文案。
+ *
+ * @returns {Promise<void>}
+ */
+async function handleHtmlLangChanged(): Promise<void> {
+  await syncWebLanguageFromHtml();
+  refreshEnhancedButtonsLocale();
+}
+
+/**
+ * 刷新所有已注入按钮的本地化文案。
+ *
+ * @returns {void}
+ */
+function refreshEnhancedButtonsLocale(): void {
+  const buttons = document.querySelectorAll<HTMLButtonElement>(MARKDOWN_BUTTON_SELECTOR);
+  for (const button of buttons) {
+    refreshButtonLocale(button);
   }
 }
 

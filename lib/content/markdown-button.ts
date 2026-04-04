@@ -4,7 +4,7 @@
  */
 
 import { hideTooltip, refreshTooltipText, showTooltip } from './tooltip';
-import { t } from '../i18n';
+import { tWeb } from '../web-i18n';
 import markdownButtonStyles from './markdown-button.css?raw';
 import markdownButtonIconsSprite from './md-copy-icons.svg?raw';
 
@@ -26,10 +26,8 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
   const button = document.createElement('button');
   button.type = 'button';
   button.className = `${officialButton.className} md-copy-button`;
-  const idleText = t('mdCopyButtonIdle', BUTTON_TEXT_IDLE);
-  button.setAttribute('aria-label', idleText);
-  button.dataset.tooltip = idleText;
   button.dataset.state = 'idle';
+  refreshButtonLocale(button);
 
   const iconWrap = document.createElement('span');
   iconWrap.className = 'flex items-center justify-center touch:w-10 h-8 w-8 md-copy-icon-wrap';
@@ -52,25 +50,15 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
  */
 export function setButtonState(button: HTMLButtonElement, state: ButtonState): void {
   button.dataset.state = state;
+  refreshButtonLocale(button);
 
   if (state === 'idle') {
-    const idleText = t('mdCopyButtonIdle', BUTTON_TEXT_IDLE);
-    button.setAttribute('aria-label', idleText);
-    button.dataset.tooltip = idleText;
-    refreshTooltipText(button);
     return;
   }
   if (state === 'loading') {
-    button.setAttribute('aria-label', t('mdCopyButtonLoading', BUTTON_TEXT_LOADING));
-    button.dataset.tooltip = t('mdCopyButtonLoadingTooltip', `${BUTTON_TEXT_LOADING}...`);
-    refreshTooltipText(button);
     return;
   }
   if (state === 'success') {
-    const successText = t('mdCopyButtonSuccess', BUTTON_TEXT_SUCCESS);
-    button.setAttribute('aria-label', successText);
-    button.dataset.tooltip = successText;
-    refreshTooltipText(button);
     window.setTimeout(() => {
       if (button.dataset.state === 'success') {
         setButtonState(button, 'idle');
@@ -79,10 +67,6 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
     return;
   }
 
-  const errorText = t('mdCopyButtonError', BUTTON_TEXT_ERROR);
-  button.setAttribute('aria-label', errorText);
-  button.dataset.tooltip = errorText;
-  refreshTooltipText(button);
   window.setTimeout(() => {
     if (button.dataset.state === 'error') {
       setButtonState(button, 'idle');
@@ -108,6 +92,20 @@ export function installMarkdownButtonStyles(): void {
 }
 
 /**
+ * 根据按钮当前状态刷新本地化文案。
+ *
+ * @param {HTMLButtonElement} button 目标按钮。
+ * @returns {void}
+ */
+export function refreshButtonLocale(button: HTMLButtonElement): void {
+  const state = normalizeButtonState(button.dataset.state);
+  const { ariaLabel, tooltipText } = getButtonCopyText(state);
+  button.setAttribute('aria-label', ariaLabel);
+  button.dataset.tooltip = tooltipText;
+  refreshTooltipText(button);
+}
+
+/**
  * 创建按钮图标。
  *
  * @param {boolean} isCheck 是否创建成功态勾选图标。
@@ -128,6 +126,45 @@ function createIcon(isCheck: boolean): SVGSVGElement {
   use.setAttribute('xlink:href', spriteHref);
   icon.append(use);
   return icon;
+}
+
+/**
+ * 对按钮状态字符串做归一化。
+ *
+ * @param {string | undefined} state 按钮状态字符串。
+ * @returns {ButtonState}
+ */
+function normalizeButtonState(state: string | undefined): ButtonState {
+  if (state === 'loading' || state === 'success' || state === 'error') return state;
+  return 'idle';
+}
+
+/**
+ * 获取按钮状态对应的文案。
+ *
+ * @param {ButtonState} state 按钮状态。
+ * @returns {{ ariaLabel: string; tooltipText: string }}
+ */
+function getButtonCopyText(state: ButtonState): { ariaLabel: string; tooltipText: string } {
+  if (state === 'loading') {
+    return {
+      ariaLabel: tWeb('mdCopyButtonLoading', BUTTON_TEXT_LOADING),
+      tooltipText: tWeb('mdCopyButtonLoadingTooltip', `${BUTTON_TEXT_LOADING}...`),
+    };
+  }
+
+  if (state === 'success') {
+    const successText = tWeb('mdCopyButtonSuccess', BUTTON_TEXT_SUCCESS);
+    return { ariaLabel: successText, tooltipText: successText };
+  }
+
+  if (state === 'error') {
+    const errorText = tWeb('mdCopyButtonError', BUTTON_TEXT_ERROR);
+    return { ariaLabel: errorText, tooltipText: errorText };
+  }
+
+  const idleText = tWeb('mdCopyButtonIdle', BUTTON_TEXT_IDLE);
+  return { ariaLabel: idleText, tooltipText: idleText };
 }
 
 /**
