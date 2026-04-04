@@ -61,11 +61,31 @@ jobs:
           echo "release_type=stable" >> "${GITHUB_OUTPUT}"
           echo "prerelease=false" >> "${GITHUB_OUTPUT}"
 
+      - name: Generate release notes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          EXTRA_ARGS=()
+          if [[ "${{ steps.classify.outputs.prerelease }}" == "true" ]]; then
+            EXTRA_ARGS+=(--prerelease)
+          fi
+
+          npx --yes changelogithub \
+            --capitalize \
+            --group \
+            --contributors \
+            --name "${GITHUB_REF_NAME}" \
+            --output RELEASE_NOTES.md \
+            "${EXTRA_ARGS[@]}"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ steps.classify.outputs.prerelease }}
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
           files: .output/*.zip
