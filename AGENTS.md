@@ -12,7 +12,7 @@
 - `docs/architecture.md`：项目架构、模块职责与实现说明。
 
 ## 工程约定
-- 修改代码后必须执行：`pnpm build`。
+- 仅在修改代码（影响扩展运行逻辑）后执行 `pnpm build`；纯文档、Issue 模板或说明文字改动可跳过。
 - 新增或重写的函数/模块应补充 docstring，并遵循 JSDoc 规范。
 - 注释与 docstring 默认使用中文（如无特殊要求）。
 
