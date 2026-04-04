@@ -1,0 +1,47 @@
+name: Bug 反馈（复制结果异常）
+description: 用于反馈 Markdown 复制结果与 ChatGPT 页面显示不一致的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！为了便于快速复现，请尽量完整填写以下信息。
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: 问题描述
+      description: 描述你遇到的问题，以及你预期的正确结果。
+      placeholder: 例如：公式复制后丢失了界定符，预期应保留 $$...$$。
+    validations:
+      required: true
+  - type: textarea
+    id: html-snippet
+    attributes:
+      label: ChatGPT 回复 HTML（必填）
+      description: |
+        请提供出问题回复对应的 HTML：
+        1. 打开开发者工具，选中回复容器元素后“复制元素（Copy element）”并粘贴片段；
+        2. 或直接保存完整网页，将 HTML 文件拖拽上传到 Issue。
+      placeholder: 在这里粘贴 HTML 片段，或在评论中补充上传的 HTML 文件信息。
+      render: html
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 问题截图（必填）
+      description: 请上传 ChatGPT 页面截图，需能看清原始回复内容。
+      placeholder: 将截图拖拽到输入框即可上传。
+    validations:
+      required: true
+  - type: textarea
+    id: copied-markdown
+    attributes:
+      label: 实际复制出的结果（必填）
+      description: 请粘贴点击“复制 Markdown”后得到的内容。
+      placeholder: 粘贴实际复制结果（Markdown 文本）。
+      render: markdown
+    validations:
+      required: true
