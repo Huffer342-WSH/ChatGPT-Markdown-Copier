@@ -30,7 +30,7 @@
 
 ### 使用方式
 
-在 ChatGPT 恢复的下下面会多一个按钮，点击按钮可复制当前回复为 Markdown。
+在 ChatGPT 回复的下面会多一个按钮，点击按钮可复制当前回复为 Markdown。
 
 ![使用方式](./assets/usage.png)
 
@@ -74,3 +74,8 @@ pnpm run zip       # 打包发布产物
 - `docs/architecture.md`：架构与模块说明
 
 架构细节见：[docs/architecture.md](./docs/architecture.md)
+
+
+### 其他
+
+还有一种思路是出发官方的按钮拿到处理后的markdown字符串，和html比对并修改

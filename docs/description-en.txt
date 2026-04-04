@@ -1,0 +1,12 @@
+ChatGPT Markdown Copier adds a dedicated Markdown copy action to assistant replies on the ChatGPT website, making it easier to capture responses in a format that is ready for notes, documents, wikis, repositories, and other Markdown-based workflows. After installation, users can copy a reply as Markdown directly from the reply action area instead of relying on plain copy behavior that may require additional cleanup before reuse.
+
+This extension is designed for people who regularly save or repurpose AI-generated content, including developers, students, researchers, writers, and knowledge workers. It is especially useful when a response contains mathematical expressions, code snippets, tables, links, headings, lists, block quotes, or inline code. The goal is to preserve structure in a way that is more practical for downstream editing and sharing, while reducing the amount of manual formatting correction needed after copying.
+
+The project focuses on user-visible output quality. In particular, it gives extra attention to mathematical formulas and code blocks, because these are often the parts most likely to break when copied with default page actions. The extension attempts to produce Markdown that is easier to reuse by preserving formula content more accurately, keeping code block line breaks intact, retaining common language hints when available, and converting common content structures into readable Markdown output. This helps users move ChatGPT answers into their own tools with less friction.
+
+The extension works only within ChatGPT assistant reply areas and does not rely on external services to perform the conversion. It operates on the content rendered in the current page, which keeps the workflow lightweight and direct. Because the implementation depends on the page structure used by ChatGPT, behavior may need updates when that structure changes. Ongoing maintenance is part of the project, and user reports are valuable for improving compatibility and output quality.
+
+Project page:
+https://github.com/Huffer342-WSH/ChatGPT-Markdown-Copier
+
+If you encounter incorrect copy results, missing buttons, formula issues, code formatting problems, or other unexpected behavior, please report them through GitHub Issues in the project repository. When possible, include the relevant page fragment, screenshots, and the actual copied result so the issue can be reproduced and fixed more efficiently.
