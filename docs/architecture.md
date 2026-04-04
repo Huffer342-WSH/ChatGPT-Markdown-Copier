@@ -42,10 +42,12 @@ lib/
 public/
   md-copy-main.svg        # 按钮默认图标
   md-copy-check.svg       # 按钮成功态图标
-  icon/*                  # 扩展图标
   _locales/
   en/messages.json        # 英文文案
   zh_CN/messages.json     # 简体中文文案
+
+assets/
+  icon.png                # 扩展母图标（由 @wxt-dev/auto-icons 自动生成多尺寸图标）
 
 docs/
   architecture.md         # 当前文档

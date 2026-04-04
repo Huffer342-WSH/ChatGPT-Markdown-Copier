@@ -1,8 +1,8 @@
 # ChatGPT Markdown Copier
 
 <p align="center">
-  <img src="./docs/assets/chatgpt-ui.png" alt="ChatGPT 按钮效果" width="49%" />
-  <img src="./docs/assets/markdown-result.png" alt="复制结果示例" width="49%" />
+  <img src="./assets/chatgpt-ui.png" alt="ChatGPT 按钮效果" width="49%" />
+  <img src="./assets/markdown-result.png" alt="复制结果示例" width="49%" />
 </p>
 
 在 ChatGPT 官方“复制回复”按钮旁增加“复制 Markdown”按钮，可以复制正确的数学公式。
@@ -26,13 +26,13 @@
 4. 打开右上角“开发者模式”
 5. 点击“加载已解压的扩展程序”，选择解压后的目录
 
-![Chrome 加载已解压扩展](./docs/assets/chrome-load-unpacked.png)
+![Chrome 加载已解压扩展](./assets/chrome-load-unpacked.png)
 
 ### 使用方式
 
 在 ChatGPT 恢复的下下面会多一个按钮，点击按钮可复制当前回复为 Markdown。
 
-![使用方式](./docs/assets/usage.png)
+![使用方式](./assets/usage.png)
 
 ## Issue 提交规范
 

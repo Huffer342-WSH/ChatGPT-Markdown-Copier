@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.13",
+    "@wxt-dev/auto-icons": "^1.1.1",
     "typescript": "^5.9.3",
     "wxt": "^0.20.20"
   },
