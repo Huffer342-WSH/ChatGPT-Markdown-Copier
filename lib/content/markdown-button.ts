@@ -41,9 +41,9 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
   iconWrap.append(createIcon(false), createIcon(true));
   button.append(iconWrap);
 
-  button.addEventListener('mouseenter', () => showTooltip(button));
+  button.addEventListener('mouseenter', () => showTooltip(button, { deferIfExternalVisible: true }));
   button.addEventListener('mouseleave', () => hideTooltip(button));
-  button.addEventListener('focus', () => showTooltip(button));
+  button.addEventListener('focus', () => showTooltip(button, { deferIfExternalVisible: false }));
   button.addEventListener('blur', () => hideTooltip(button));
   return button;
 }
