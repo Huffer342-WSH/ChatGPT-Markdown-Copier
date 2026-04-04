@@ -1,0 +1,30 @@
+{
+  "extName": {
+    "message": "ChatGPT Markdown Copier",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Add a Markdown copy button for ChatGPT responses",
+    "description": "Extension description"
+  },
+  "mdCopyButtonIdle": {
+    "message": "Copy Markdown",
+    "description": "Default label and tooltip for the Markdown copy button"
+  },
+  "mdCopyButtonLoading": {
+    "message": "Preparing Markdown",
+    "description": "Aria label while Markdown content is being prepared"
+  },
+  "mdCopyButtonLoadingTooltip": {
+    "message": "Preparing Markdown...",
+    "description": "Tooltip text while Markdown content is being prepared"
+  },
+  "mdCopyButtonSuccess": {
+    "message": "Markdown copied",
+    "description": "Success label and tooltip after copy"
+  },
+  "mdCopyButtonError": {
+    "message": "Copy failed, click to retry",
+    "description": "Error label and tooltip when copy fails"
+  }
+}

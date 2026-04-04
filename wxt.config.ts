@@ -3,8 +3,9 @@ import { defineConfig } from 'wxt';
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: {
-    name: 'ChatGPT Markdown Copier',
-    description: 'Add a Markdown copy button for ChatGPT responses',
+    default_locale: 'en',
+    name: '__MSG_extName__',
+    description: '__MSG_extDescription__',
     host_permissions: ['https://chatgpt.com/*'],
     permissions: ['clipboardWrite'],
     web_accessible_resources: [

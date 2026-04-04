@@ -4,6 +4,7 @@
  */
 
 import { hideTooltip, refreshTooltipText, showTooltip } from './tooltip';
+import { t } from '../i18n';
 
 export type ButtonState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -15,6 +16,10 @@ const ICON_CHECK_URL =
   (globalThis as { chrome?: { runtime?: { getURL?: (path: string) => string } } }).chrome?.runtime?.getURL?.(
     'md-copy-check.svg',
   ) ?? '/md-copy-check.svg';
+const BUTTON_TEXT_IDLE = '复制 Markdown';
+const BUTTON_TEXT_LOADING = '正在准备 Markdown';
+const BUTTON_TEXT_SUCCESS = 'Markdown 已复制';
+const BUTTON_TEXT_ERROR = '复制失败，点击重试';
 
 /**
  * 创建 Markdown 复制按钮。
@@ -26,8 +31,9 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
   const button = document.createElement('button');
   button.type = 'button';
   button.className = `${officialButton.className} md-copy-button`;
-  button.setAttribute('aria-label', '复制 Markdown');
-  button.dataset.tooltip = '复制 Markdown';
+  const idleText = t('mdCopyButtonIdle', BUTTON_TEXT_IDLE);
+  button.setAttribute('aria-label', idleText);
+  button.dataset.tooltip = idleText;
   button.dataset.state = 'idle';
 
   const iconWrap = document.createElement('span');
@@ -53,20 +59,22 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
   button.dataset.state = state;
 
   if (state === 'idle') {
-    button.setAttribute('aria-label', '复制 Markdown');
-    button.dataset.tooltip = '复制 Markdown';
+    const idleText = t('mdCopyButtonIdle', BUTTON_TEXT_IDLE);
+    button.setAttribute('aria-label', idleText);
+    button.dataset.tooltip = idleText;
     refreshTooltipText(button);
     return;
   }
   if (state === 'loading') {
-    button.setAttribute('aria-label', '正在准备 Markdown');
-    button.dataset.tooltip = '正在准备 Markdown...';
+    button.setAttribute('aria-label', t('mdCopyButtonLoading', BUTTON_TEXT_LOADING));
+    button.dataset.tooltip = t('mdCopyButtonLoadingTooltip', `${BUTTON_TEXT_LOADING}...`);
     refreshTooltipText(button);
     return;
   }
   if (state === 'success') {
-    button.setAttribute('aria-label', 'Markdown 已复制');
-    button.dataset.tooltip = 'Markdown 已复制';
+    const successText = t('mdCopyButtonSuccess', BUTTON_TEXT_SUCCESS);
+    button.setAttribute('aria-label', successText);
+    button.dataset.tooltip = successText;
     refreshTooltipText(button);
     window.setTimeout(() => {
       if (button.dataset.state === 'success') {
@@ -76,8 +84,9 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
     return;
   }
 
-  button.setAttribute('aria-label', '复制失败，点击重试');
-  button.dataset.tooltip = '复制失败，点击重试';
+  const errorText = t('mdCopyButtonError', BUTTON_TEXT_ERROR);
+  button.setAttribute('aria-label', errorText);
+  button.dataset.tooltip = errorText;
   refreshTooltipText(button);
   window.setTimeout(() => {
     if (button.dataset.state === 'error') {

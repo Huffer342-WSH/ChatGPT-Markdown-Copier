@@ -33,6 +33,7 @@ entrypoints/
 
 lib/
   markdown.ts             # DOM -> Markdown 序列化核心
+  i18n.ts                 # i18n 读取封装（chrome.i18n.getMessage + fallback）
   content/
     markdown-button.ts    # Markdown 按钮创建、状态管理、样式注入
     tooltip.ts            # tooltip 挂载、定位、销毁与文案刷新
@@ -42,6 +43,9 @@ public/
   md-copy-main.svg        # 按钮默认图标
   md-copy-check.svg       # 按钮成功态图标
   icon/*                  # 扩展图标
+  _locales/
+  en/messages.json        # 英文文案
+  zh_CN/messages.json     # 简体中文文案
 
 docs/
   architecture.md         # 当前文档
@@ -115,6 +119,14 @@ docs/
 负责 tooltip 的显示、隐藏、重定位和文案同步。
 
 当前实现是一个轻量级 DOM tooltip，而不是依赖外部 UI 库。这样做是为了降低体积和维护成本，同时尽量贴近 ChatGPT 原生交互。
+
+### `lib/i18n.ts`
+
+负责统一读取扩展文案：
+
+- 调用 `chrome.i18n.getMessage`
+- 在消息缺失时返回本地 fallback，避免按钮出现空文案
+- 为内容脚本层提供稳定的 `t(...)` 入口
 
 ### `entrypoints/background.ts`
 
@@ -222,6 +234,9 @@ docs/
 
 当前关键配置位于 [`wxt.config.ts`](../wxt.config.ts)：
 
+- `default_locale`: `en`
+- `name`: `__MSG_extName__`
+- `description`: `__MSG_extDescription__`
 - `host_permissions`: `https://chatgpt.com/*`
 - `permissions`: `clipboardWrite`
 - `web_accessible_resources`: 暴露 `md-copy-main.svg` 与 `md-copy-check.svg`
