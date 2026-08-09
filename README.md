@@ -5,7 +5,7 @@
   <img src="./assets/markdown-result.png" alt="复制结果示例" width="49%" />
 </p>
 
-在 ChatGPT 官方“复制回复”按钮旁增加“复制 Markdown”按钮，可以复制正确的数学公式。
+在 ChatGPT 官方“复制回复”按钮旁增加“复制 Markdown”按钮，并让鼠标选中的数学公式以 LaTeX 格式复制。
 
 > 原版复制的数学公式界定符有问题
 
@@ -18,19 +18,23 @@
 
 ## 安装与使用
 
-### 安装步骤（Chrome）
+### 安装步骤（Chrome / Edge）
 
 1. 在 [Releases](https://github.com/Huffer342-WSH/ChatGPT-Markdown-Copier/releases) 下载 `chatgpt-markdown-copier-xxx-chrome.zip`
 2. 解压 zip 到本地目录
-3. 打开 Chrome 扩展页面：`chrome://extensions/`
+3. Chrome 打开 `chrome://extensions/`；Edge 打开 `edge://extensions/`
 4. 打开右上角“开发者模式”
 5. 点击“加载已解压的扩展程序”，选择解压后的目录
+
+从源码本地构建时，请选择 `.output/chrome-mv3`，不要选择项目根目录。
 
 ![Chrome 加载已解压扩展](./assets/chrome-load-unpacked.png)
 
 ### 使用方式
 
 在 ChatGPT 回复的下面会多一个按钮，点击按钮可复制当前回复为 Markdown。
+
+也可以直接用鼠标选择回复中的公式并复制。即使只选中公式的一部分，扩展也会复制完整公式；行内公式使用 `$...$`，块级公式使用 `$$...$$`。
 
 ![使用方式](./assets/usage.png)
 
@@ -62,6 +66,7 @@ pnpm run dev
 
 ```bash
 pnpm run compile   # TypeScript 类型检查
+pnpm run test      # DOM 与选区复制回归测试
 pnpm run build     # 生产构建（修改代码后必跑）
 pnpm run zip       # 打包发布产物
 ```

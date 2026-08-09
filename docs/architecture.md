@@ -33,6 +33,8 @@ entrypoints/
 
 lib/
   markdown.ts             # DOM -> Markdown 序列化核心
+  math.ts                 # 数学公式边界识别、LaTeX 提取与分隔符生成
+  selection-copy.ts       # 公式选区复制与原生回退
   i18n.ts                 # 扩展壳层 i18n 读取封装（chrome.i18n）
   web-i18n.ts             # 页面注入文案 i18n（i18next + html lang）
   content/
@@ -67,11 +69,12 @@ docs/
 
 主要职责：
 
-- 在 `document_idle` 时机注入
+- 在 `document_start` 时机先安装公式复制监听器，并在 `DOMContentLoaded` 后启动 UI
 - 安装按钮样式
 - 通过 `MutationObserver` 监听 ChatGPT SPA 页面变化
 - 扫描官方复制按钮，并在 assistant 回复中追加 Markdown 按钮
 - 处理点击事件，执行“定位消息 -> 序列化 -> 写入剪贴板 -> 更新状态”的主流程
+- 安装公式选区 `copy` 监听器，使局部选中的公式按完整 LaTeX 复制
 
 这是编排层，不应堆积过多具体序列化规则或复杂 DOM 细节。
 
@@ -103,6 +106,24 @@ docs/
 - 行内公式与块级公式
 
 这部分是最容易因修复一个场景而影响另一个场景的模块，后续修改需要格外关注回归风险。
+
+### `lib/math.ts`
+
+负责整条回复复制与选区复制共用的数学公式 DOM 适配：
+
+- 定位新版 `[data-math-source]` 包装、行内 `.katex` 与块级 `.katex-display` 边界
+- 优先从 `annotation[encoding="application/x-tex"]` 读取旧版 KaTeX 真值
+- 兼容新版 ChatGPT 的 `data-math-source`，并以 `data-tex`、`data-latex`、`data-math` 作为补充回退
+- 按行内 `$...$`、块级 `$$...$$` 生成 Markdown 公式文本
+
+### `lib/selection-copy.ts`
+
+负责接管 ChatGPT 页面中包含公式的选区复制：
+
+- 监听用户触发的同步 `copy` 事件
+- 将落在公式内部的选区端点扩展到完整公式边界
+- 在 `text/plain` 中输出 LaTeX，同时保留原选区 `text/html`
+- 普通文字、可编辑区域或缺失全部 LaTeX 源码时回退原生复制
 
 ### `lib/content/markdown-button.ts`
 
@@ -167,6 +188,15 @@ docs/
 
 - 正确定位当前 assistant 消息
 - 正确将 DOM 转换为 Markdown
+
+公式选区复制是另一条独立但复用公式提取能力的流程：
+
+1. 用户在页面中触发复制
+2. 内容脚本验证选区非空且不在可编辑区域
+3. 若端点位于公式内部，将克隆 Range 扩展到完整公式边界
+4. 克隆选区 DOM，并用 annotation 或源码属性中的 LaTeX 替换公式渲染节点
+5. 同步写入 `text/plain` 与 `text/html`，阻止页面后续监听器覆盖结果
+6. 任一步无法安全完成时不取消事件，由浏览器执行原生复制
 
 ## DOM 适配策略
 
@@ -266,7 +296,9 @@ docs/
 - 主要面向 assistant 回复，不处理 user 消息
 - 依赖 ChatGPT 当前 DOM 结构，不保证对历史或实验性 UI 100% 通用
 - 复制逻辑完全基于 DOM，因此结果质量受页面实际渲染结构影响
-- 尚未建立自动化回归测试，当前验证仍以手工检查和构建通过为主
+- 公式选区复制已建立 DOM 单元测试；真实系统剪贴板仍需通过 Edge / Chrome 手工回归
+- 公式选区复制只处理浏览器当前的单 Range 选区
+- 公式同时缺少 annotation 与 `data-math-source` 等源码属性时不会猜测或执行 OCR，而是回退原生复制
 
 ## 后续维护建议
 

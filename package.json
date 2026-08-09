@@ -2,7 +2,7 @@
   "name": "chatgpt-markdown-copier",
   "description": "Copy ChatGPT responses as Markdown with math fixes",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -12,19 +12,16 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "test": "vitest run",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
     "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.13",
     "@wxt-dev/auto-icons": "^1.1.1",
+    "jsdom": "^30.0.1",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
     "wxt": "^0.20.20"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "spawn-sync"
-    ]
   },
   "dependencies": {
     "i18next": "^26.0.3",
