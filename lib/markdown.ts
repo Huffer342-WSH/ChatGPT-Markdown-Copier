@@ -1,7 +1,13 @@
 /**
  * DOM -> Markdown 序列化模块：
- * 将 ChatGPT assistant 消息内容转换为 Markdown，并以 KaTeX annotation 作为数学公式真值源。
+ * 将 ChatGPT assistant 消息内容转换为 Markdown，并从公式源码节点恢复 LaTeX。
  */
+
+import {
+  extractLatexFromMathContainer,
+  isDisplayMathElement,
+  isInlineMathElement,
+} from './math';
 
 /**
  * 将 assistant 消息 DOM 直接序列化为 Markdown。
@@ -72,8 +78,8 @@ function serializeNodeAsBlock(node: ChildNode, indent: number): string | null {
   const el = node as HTMLElement;
   if (shouldSkipElement(el)) return null;
 
-  if (isKatexDisplayElement(el)) {
-    const latex = extractLatexFromKatexContainer(el);
+  if (isDisplayMathElement(el)) {
+    const latex = extractLatexFromMathContainer(el);
     if (latex) return `$$\n${latex}\n$$`;
     const plain = normalizeInlineText(el.textContent ?? '');
     return plain || null;
@@ -168,14 +174,14 @@ function serializeNodeAsInline(node: ChildNode): string {
   const el = node as HTMLElement;
   if (shouldSkipElement(el)) return '';
 
-  if (isKatexDisplayElement(el)) {
-    const latex = extractLatexFromKatexContainer(el);
+  if (isDisplayMathElement(el)) {
+    const latex = extractLatexFromMathContainer(el);
     if (latex) return `\n\n$$\n${latex}\n$$\n\n`;
     return normalizeInlineText(el.textContent ?? '');
   }
 
-  if (isInlineKatexElement(el)) {
-    const latex = extractLatexFromKatexContainer(el);
+  if (isInlineMathElement(el)) {
+    const latex = extractLatexFromMathContainer(el);
     if (latex) return `$${latex}$`;
     return normalizeInlineText(el.textContent ?? '');
   }
@@ -477,39 +483,6 @@ function serializeTable(tableEl: HTMLElement): string {
   ];
 
   return lines.join('\n');
-}
-
-/**
- * 判断是否为行内 katex。
- *
- * @param {HTMLElement} el 待判断元素。
- * @returns {boolean}
- */
-function isInlineKatexElement(el: HTMLElement): boolean {
-  return el.classList.contains('katex') && !el.closest('.katex-display');
-}
-
-/**
- * 判断是否为块级 katex。
- *
- * @param {HTMLElement} el 待判断元素。
- * @returns {boolean}
- */
-function isKatexDisplayElement(el: HTMLElement): boolean {
-  return el.classList.contains('katex-display');
-}
-
-/**
- * 从 katex 容器读取 LaTeX 真值。
- *
- * @param {HTMLElement} container katex 容器。
- * @returns {string}
- */
-function extractLatexFromKatexContainer(container: HTMLElement): string {
-  const annotation = container.querySelector<HTMLElement>(
-    'annotation[encoding="application/x-tex"]',
-  );
-  return normalizeInlineText(annotation?.textContent ?? '');
 }
 
 /**

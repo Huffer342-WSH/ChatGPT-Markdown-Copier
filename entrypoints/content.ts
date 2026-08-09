@@ -11,6 +11,7 @@ import {
 } from '../lib/content/markdown-button';
 import { findMessageRoot, isAssistantTurnButton, logMarkdownCopyDebugDom } from '../lib/content/message-root';
 import { serializeMessageDomToMarkdown } from '../lib/markdown';
+import { installMathSelectionCopy } from '../lib/selection-copy';
 import { initWebI18n, syncWebLanguageFromHtml } from '../lib/web-i18n';
 
 const ENHANCED_ATTR = 'data-md-copy-enhanced';
@@ -18,11 +19,33 @@ const MARKDOWN_BUTTON_SELECTOR = 'button.md-copy-button';
 
 export default defineContentScript({
   matches: ['https://chatgpt.com/*'],
-  runAt: 'document_idle',
+  runAt: 'document_start',
   main() {
-    void bootstrapContentScript();
+    installMathSelectionCopy();
+    runBootstrapWhenDocumentReady();
   },
 });
+
+/**
+ * 等待正文 DOM 可用后再启动按钮与页面观察器。
+ * 公式复制监听器已在 document_start 阶段单独安装，不受异步初始化影响。
+ *
+ * @returns {void}
+ */
+function runBootstrapWhenDocumentReady(): void {
+  if (document.readyState === 'loading') {
+    document.addEventListener(
+      'DOMContentLoaded',
+      () => {
+        void bootstrapContentScript();
+      },
+      { once: true },
+    );
+    return;
+  }
+
+  void bootstrapContentScript();
+}
 
 /**
  * 内容脚本启动流程：
