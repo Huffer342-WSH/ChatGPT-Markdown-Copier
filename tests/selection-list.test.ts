@@ -52,7 +52,8 @@ describe('Edge 真实 DOM 精简样本：嵌套列表选区复制', () => {
     const title = document.querySelector('h3')!.firstChild!;
     const last = document.querySelector('ol ol li:last-child p')!.firstChild!;
     const payload = copyRange(title, last);
-    expect(payload?.textPlain).toBe(expected.trimEnd());
+    // Git 在 Windows 检出时可能将样本转为 CRLF，仅统一预期文本的换行符。
+    expect(payload?.textPlain).toBe(expected.replace(/\r\n/g, '\n').trimEnd());
     expect(window.getSelection()?.getRangeAt(0).startContainer).toBe(title);
     expect(window.getSelection()?.getRangeAt(0).endContainer).toBe(last);
     expect(payload?.textHtml).toContain('<em><strong>粗斜体</strong></em>');
