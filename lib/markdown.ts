@@ -22,6 +22,17 @@ export function serializeMessageDomToMarkdown(messageRoot: HTMLElement): string 
 }
 
 /**
+ * 序列化已裁剪且补齐格式上下文的选区，不重新查找整条消息或压缩代码空行。
+ * @param {DocumentFragment} fragment 独立的选区 DOM。
+ * @returns {string} 只含选区内容的 Markdown。
+ */
+export function serializeSelectionDomToMarkdown(fragment: DocumentFragment): string {
+  const container = fragment.ownerDocument.createElement('div');
+  container.append(fragment.cloneNode(true));
+  return serializeBlockChildren(container, 0).join('\n\n').trim();
+}
+
+/**
  * 优先定位正文区域，避免把操作按钮等区域带入结果。
  *
  * @param {HTMLElement} messageRoot assistant 消息根节点。
@@ -50,12 +61,22 @@ function extractMessageContentRoot(messageRoot: HTMLElement): HTMLElement {
  */
 function serializeBlockChildren(container: HTMLElement, indent: number): string[] {
   const blocks: string[] = [];
+  let inline = '';
 
   for (const node of Array.from(container.childNodes)) {
+    const block = node instanceof HTMLElement &&
+      (node.matches('p,h1,h2,h3,h4,h5,h6,ul,ol,pre,blockquote,hr,table,div,section,article') || isDisplayMathElement(node));
+    if (!block) {
+      inline += serializeNodeAsInline(node);
+      continue;
+    }
+    if (inline.trim()) blocks.push(inline.trim());
+    inline = '';
     const serialized = serializeNodeAsBlock(node, indent);
     if (!serialized) continue;
     blocks.push(serialized);
   }
+  if (inline.trim()) blocks.push(inline.trim());
 
   return blocks;
 }
@@ -198,7 +219,7 @@ function serializeNodeAsInline(node: ChildNode): string {
   }
 
   if (tag === 'code' && !el.closest('pre')) {
-    return `\`${escapeInlineCode(el.textContent ?? '')}\``;
+    return serializeInlineCode(el.textContent ?? '');
   }
 
   if (tag === 'strong' || tag === 'b') {
@@ -211,51 +232,94 @@ function serializeNodeAsInline(node: ChildNode): string {
     return text ? `*${text}*` : '';
   }
 
+  if (tag === 'del' || tag === 's') {
+    const text = serializeInlineChildren(el).trim();
+    return text ? `~~${text}~~` : '';
+  }
+
   return serializeInlineChildren(el);
 }
 
 /**
- * 序列化列表（支持嵌套）。
+ * 序列化列表，保留起始序号和显式编号，并按父项标记宽度缩进子列表。
  *
  * @param {HTMLElement} listEl 列表节点。
  * @param {boolean} ordered 是否有序列表。
- * @param {number} indent 当前缩进层级。
+ * @param {number} indent 当前缩进空格数。
  * @returns {string}
  */
 function serializeList(listEl: HTMLElement, ordered: boolean, indent: number): string {
   const lines: string[] = [];
-  const marker = ordered ? '1. ' : '- ';
-
   const items = Array.from(listEl.children).filter((child) => child.tagName.toLowerCase() === 'li');
-  for (const li of items) {
+  const numbers = ordered ? getOrderedListItemNumbers(listEl) : [];
+  for (const [index, li] of items.entries()) {
     const liElement = li as HTMLElement;
-    const textParts: string[] = [];
-    const nestedParts: string[] = [];
+    const marker = ordered ? `${numbers[index]}. ` : '- ';
+    const prefix = `${' '.repeat(indent)}${marker}`;
+    const continuation = ' '.repeat(indent + marker.length);
+    let emitted = false;
+    let inline = '';
+    /** @param {string} text 当前块内容。 */
+    const emitBlock = (text: string): void => {
+      if (!text.trim()) return;
+      const parts = text.split('\n');
+      if (emitted) lines.push('', `${continuation}${parts[0]}`);
+      else lines.push(`${prefix}${parts[0]}`);
+      lines.push(...parts.slice(1).map((line) => line ? `${continuation}${line}` : ''));
+      emitted = true;
+    };
+    /** 将连续行内节点作为一个块输出。 */
+    const flushInline = (): void => {
+      emitBlock(inline.trim());
+      inline = '';
+    };
 
     for (const child of Array.from(liElement.childNodes)) {
       if (child.nodeType === Node.ELEMENT_NODE) {
         const childEl = child as HTMLElement;
         const childTag = childEl.tagName.toLowerCase();
         if (childTag === 'ul' || childTag === 'ol') {
-          const nestedList = serializeList(childEl, childTag === 'ol', indent + 1);
-          if (nestedList) nestedParts.push(nestedList);
+          flushInline();
+          if (!emitted) { lines.push(prefix); emitted = true; }
+          const nestedList = serializeList(childEl, childTag === 'ol', indent + marker.length);
+          if (nestedList) lines.push(nestedList);
+          continue;
+        }
+        if (childEl.matches('p,pre,blockquote,div,section,table,h1,h2,h3,h4,h5,h6,hr')) {
+          flushInline();
+          emitBlock(serializeNodeAsBlock(childEl, 0) ?? '');
           continue;
         }
       }
 
-      const inline = serializeNodeAsInline(child);
-      if (inline) textParts.push(inline);
+      inline += serializeNodeAsInline(child);
     }
 
-    const itemText = normalizeInlineText(textParts.join('')).trim();
-    const prefix = `${'  '.repeat(indent)}${marker}`;
-    lines.push(`${prefix}${itemText}`);
-    for (const nested of nestedParts) {
-      lines.push(nested);
-    }
+    flushInline();
+    if (!emitted) lines.push(prefix);
   }
 
   return lines.join('\n');
+}
+
+/**
+ * 按 HTML 列表规则计算直接子项序号，供列表序列化与选区克隆共用。
+ * @param {HTMLElement} listEl 有序列表，支持 start、reversed 和 li.value。
+ * @returns {number[]} 与直接 li 子项顺序一致的编号。
+ */
+export function getOrderedListItemNumbers(listEl: HTMLElement): number[] {
+  const items = Array.from(listEl.children).filter((child) => child.tagName.toLowerCase() === 'li');
+  const step = listEl.hasAttribute('reversed') ? -1 : 1;
+  const start = listEl.getAttribute('start');
+  let number = start !== null && /^-?\d+$/.test(start.trim())
+    ? Number(start) : step === -1 ? items.length : 1;
+  return items.map((item) => {
+    const value = item.getAttribute('value');
+    if (value !== null && /^-?\d+$/.test(value.trim())) number = Number(value);
+    const current = number;
+    number += step;
+    return current;
+  });
 }
 
 /**
@@ -265,15 +329,16 @@ function serializeList(listEl: HTMLElement, ordered: boolean, indent: number): s
  * @returns {string}
  */
 function serializePreBlock(preEl: HTMLElement): string {
-  const language = extractPreBlockLanguage(preEl, preEl);
+  const codeEl = preEl.querySelector<HTMLElement>('code');
+  const language = extractPreBlockLanguage(preEl, codeEl ?? preEl);
   const codeMirrorText = extractCodeMirrorBlockText(preEl);
   const structuredText = extractStructuredCodeBlockText(preEl);
-  const codeEl = preEl.querySelector<HTMLElement>('code');
   const rawCodeText =
     codeMirrorText ?? structuredText ?? codeEl?.textContent ?? preEl.innerText ?? preEl.textContent ?? '';
-  const codeText = stripDuplicatedLanguagePrefix(normalizeCodeBlockText(rawCodeText), language);
-  const header = language ? `\`\`\`${language}` : '```';
-  return `${header}\n${codeText}\n\`\`\``;
+  const codeText = codeEl || codeMirrorText !== null || structuredText !== null ? normalizeCodeBlockText(rawCodeText)
+    : stripDuplicatedLanguagePrefix(normalizeCodeBlockText(rawCodeText), language);
+  const fence = '`'.repeat(Math.max(3, ...Array.from(codeText.matchAll(/`+/g), (match) => match[0].length + 1)));
+  return `${fence}${language}\n${codeText}\n${fence}`;
 }
 
 /**
@@ -354,6 +419,7 @@ function collectCodeMirrorText(node: ChildNode, parts: string[]): void {
   for (const child of Array.from(el.childNodes)) {
     collectCodeMirrorText(child, parts);
   }
+  if (el.classList.contains('cm-line') && parts.at(-1) !== '\n') parts.push('\n');
 }
 
 /**
@@ -456,14 +522,15 @@ function serializeBlockquote(blockquoteEl: HTMLElement, indent: number): string 
 }
 
 /**
- * 序列表格为 GFM 格式。
+ * 序列表格为管道行，仅在选区第一行确有表头时输出 GFM 表头分隔线。
  *
  * @param {HTMLElement} tableEl 表格节点。
  * @returns {string}
  */
 function serializeTable(tableEl: HTMLElement): string {
-  const rows = Array.from(tableEl.querySelectorAll('tr')).map((row) => {
-    return Array.from(row.querySelectorAll('th, td')).map((cell) => {
+  const rowElements = Array.from(tableEl.querySelectorAll('tr')).filter((row) => row.closest('table') === tableEl);
+  const rows = rowElements.map((row) => {
+    return Array.from(row.children).filter((cell) => cell.matches('th,td')).map((cell) => {
       const cloned = cell.cloneNode(true) as HTMLElement;
       const text = serializeInlineChildren(cloned).replace(/\n+/g, ' ').trim();
       return escapeTableCell(text);
@@ -472,15 +539,14 @@ function serializeTable(tableEl: HTMLElement): string {
 
   if (rows.length === 0) return '';
 
-  const header = rows[0];
-  const body = rows.slice(1);
-  const divider = header.map(() => '---');
-
-  const lines = [
-    `| ${header.join(' | ')} |`,
-    `| ${divider.join(' | ')} |`,
-    ...body.map((row) => `| ${normalizeTableRow(row, header.length).join(' | ')} |`),
-  ];
+  const width = Math.max(...rows.map((row) => row.length));
+  if (!width) return '';
+  const lines = rows.map((row) => `| ${normalizeTableRow(row, width).join(' | ')} |`);
+  const firstRow = rowElements[0];
+  if (firstRow.parentElement?.tagName.toLowerCase() === 'thead' ||
+      Array.from(firstRow.children).some((cell) => cell.tagName.toLowerCase() === 'th')) {
+    lines.splice(1, 0, `| ${Array(width).fill('---').join(' | ')} |`);
+  }
 
   return lines.join('\n');
 }
@@ -520,13 +586,16 @@ function normalizeCodeBlockText(input: string): string {
 }
 
 /**
- * 行内 code 反引号转义。
+ * 生成比内容中反引号更长的代码分隔符，避免反斜杠转义改变代码文本。
  *
  * @param {string} input 原始文本。
  * @returns {string}
  */
-function escapeInlineCode(input: string): string {
-  return normalizeInlineText(input).replace(/`/g, '\\`');
+function serializeInlineCode(input: string): string {
+  const text = normalizeInlineText(input).replace(/\n/g, ' ');
+  const fence = '`'.repeat(Math.max(1, ...Array.from(text.matchAll(/`+/g), (match) => match[0].length + 1)));
+  const padding = text.startsWith('`') || text.endsWith('`') || (/^ .* $/.test(text) && text.trim()) ? ' ' : '';
+  return `${fence}${padding}${text}${padding}${fence}`;
 }
 
 /**

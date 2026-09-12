@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>Word 复制兼容性检查</title>
+<style>
+  body { max-width: 850px; margin: 40px auto; padding: 0 20px; font: 16px/1.7 system-ui; color: #17212e; background: #fff; }
+  button { margin: 6px 8px 6px 0; padding: 10px 16px; cursor: pointer; }
+  textarea { box-sizing: border-box; width: 100%; min-height: 150px; padding: 12px; }
+  pre { white-space: pre-wrap; background: #f2f5f8; padding: 16px; }
+</style>
+<h1>Word 复制兼容性检查</h1>
+<p>本页只在本地运行，不上传、不保存剪贴板内容，也不修改扩展。按钮使用与扩展相同的 copy 事件写入两种格式。</p>
+<h2>1. 检查扩展实际输出</h2>
+<p>在 ChatGPT 选中含公式的一小段并复制，再粘贴到下面。这里会显示格式统计，不会展示全文。</p>
+<textarea id="inspect" placeholder="将含公式的复制内容粘贴到这里"></textarea>
+<h2>2. 分别试贴到 Word</h2>
+<p>每个按钮复制相同内容：标题、列表和 E = mc²。请逐个粘贴到 Word 空白文档，记录是否出现可编辑公式。</p>
+<button data-format="mathml">复制普通 MathML</button>
+<button data-format="prefixed">复制带前缀 MathML</button>
+<button data-format="omml">复制 Word OMML</button>
+<p id="status" role="status"></p>
+<p>请一并记录软件名称和版本，以及使用“保留源格式”还是“合并格式”。这些按钮仅用于定位兼容路径，不代表该路径已验证可用。</p>
+<textarea id="copy-target" aria-hidden="true" tabindex="-1" style="position:fixed;left:-10000px;top:0;width:1px;height:1px">诊断</textarea>
+<script>
+  const source = 'E = mc²';
+  const samples = {
+    mathml: '<math xmlns="http://www.w3.org/1998/Math/MathML"><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow></math>',
+    prefixed: '<mml:math xmlns:mml="http://www.w3.org/1998/Math/MathML"><mml:mrow><mml:mi>E</mml:mi><mml:mo>=</mml:mo><mml:mi>m</mml:mi><mml:msup><mml:mi>c</mml:mi><mml:mn>2</mml:mn></mml:msup></mml:mrow></mml:math>',
+    omml: '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>E= m</m:t></m:r><m:sSup><m:e><m:r><m:t>c</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>',
+  };
+  let pending = null;
+  document.addEventListener('copy', (event) => {
+    if (!pending || !event.clipboardData) return;
+    event.clipboardData.setData('text/plain', '公式检查\n- ' + source);
+    event.clipboardData.setData('text/html', '<html xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><body><h3>公式检查</h3><ul><li>' + pending + '</li></ul></body></html>');
+    event.preventDefault();
+  });
+  document.querySelectorAll('button[data-format]').forEach((button) => {
+    button.addEventListener('click', () => {
+      pending = samples[button.dataset.format];
+      try {
+        document.getElementById('copy-target').select();
+        const copied = document.execCommand('copy');
+        document.getElementById('status').textContent = copied
+          ? button.textContent + '：浏览器已处理复制请求，请实际粘贴验证。'
+          : '浏览器未处理复制请求。';
+      } finally {
+        pending = null;
+        button.focus();
+      }
+    });
+  });
+  document.getElementById('inspect').addEventListener('paste', (event) => {
+    event.preventDefault();
+    const html = event.clipboardData?.getData('text/html') ?? '';
+    const plain = event.clipboardData?.getData('text/plain') ?? '';
+    const result = {
+      formats: Array.from(event.clipboardData?.types ?? []),
+      htmlLength: html.length,
+      plainLength: plain.length,
+      mathmlCount: (html.match(/<(?:[\w-]+:)?math[\s>]/gi) ?? []).length,
+      ommlCount: (html.match(/<m:oMath[\s>]/gi) ?? []).length,
+      hasKatexLayout: /katex-html/.test(html),
+    };
+    event.currentTarget.value = JSON.stringify(result, null, 2);
+  });
+</script>
+</html>

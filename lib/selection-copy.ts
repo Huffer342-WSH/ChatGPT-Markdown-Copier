@@ -1,6 +1,5 @@
 /**
- * 数学公式选区复制模块：
- * 仅在 ChatGPT 页面选区包含可恢复源码的数学公式时接管复制。
+ * Markdown 选区复制模块：恢复回复选区的格式，并保留完整公式复制行为。
  */
 
 import {
@@ -10,34 +9,13 @@ import {
   isDisplayMathElement,
   wrapLatexForMarkdown,
 } from './math';
+import { getOrderedListItemNumbers, serializeSelectionDomToMarkdown } from './markdown';
+import { replaceClipboardMath } from './clipboard-math';
 
 const EDITABLE_SELECTOR =
   'input, textarea, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
-const BLOCK_TEXT_TAGS = new Set([
-  'address',
-  'article',
-  'aside',
-  'blockquote',
-  'div',
-  'footer',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'header',
-  'li',
-  'main',
-  'nav',
-  'ol',
-  'p',
-  'pre',
-  'section',
-  'table',
-  'tr',
-  'ul',
-]);
+const CONTENT_SELECTOR = '.markdown, [data-message-author-role="assistant"]';
+const FORMAT_SELECTOR = 'h1,h2,h3,h4,h5,h6,strong,b,em,i,del,s,a,code,pre,ul,ol,blockquote,table,hr';
 
 export interface MathSelectionClipboardPayload {
   textPlain: string;
@@ -83,7 +61,7 @@ export function handleMathSelectionCopy(event: ClipboardEvent): void {
 }
 
 /**
- * 根据当前选区生成数学感知的剪贴板内容。
+ * 根据选区生成 Markdown；无公式时仅接管同一回复正文内的格式化内容。
  *
  * @param {Selection} selection 浏览器当前选区。
  * @returns {MathSelectionClipboardPayload | null}
@@ -101,15 +79,81 @@ export function createMathSelectionClipboardPayload(
   const expandedRange = sourceRange.cloneRange();
   expandRangeToFormulaBoundaries(expandedRange);
 
-  const selectedFragment = expandedRange.cloneContents();
+  const startItem = getContainingElement(sourceRange.startContainer)?.closest('li');
+  const endItem = getContainingElement(sourceRange.endContainer)?.closest('li');
+  // 同一列表项内部的文字不补列表外壳；显式选取整个 li 节点内容则保留结构。
+  const inlineItem = startItem && startItem === endItem &&
+    (sourceRange.startContainer !== startItem || sourceRange.endContainer !== startItem) ? startItem : null;
+  const selectedFragment = cloneSelectionWithContext(expandedRange, inlineItem);
+  const cells = selectedFragment.querySelectorAll('td,th');
+  const singleCell = cells.length === 1 &&
+    !!getContainingElement(sourceRange.commonAncestorContainer)?.closest('table');
+  if (singleCell) {
+    // 单元格内选区仅保留内容，不补行、表头或整个表格。
+    const contents = document.createDocumentFragment();
+    contents.append(...Array.from(cells[0].childNodes));
+    selectedFragment.replaceChildren(contents);
+  }
+  const formulas = findTopLevelMathElements(selectedFragment);
+  if (formulas.length === 0) {
+    const startContent = getContainingElement(sourceRange.startContainer)?.closest(CONTENT_SELECTOR);
+    const endContent = getContainingElement(sourceRange.endContainer)?.closest(CONTENT_SELECTOR);
+    if (!startContent || startContent !== endContent ||
+        (!inlineItem && !singleCell && !selectedFragment.querySelector(FORMAT_SELECTOR))) return null;
+  }
   const textHtml = serializeFragmentHtml(selectedFragment);
   const plainFragment = selectedFragment.cloneNode(true) as DocumentFragment;
-  if (!replaceMathWithLatex(plainFragment)) return null;
+  if (formulas.length > 0 && !replaceMathWithLatex(plainFragment)) return null;
 
-  const textPlain = serializeFragmentText(plainFragment);
+  const textPlain = singleCell ? serializeCellText(plainFragment).trim() : serializeSelectionDomToMarkdown(plainFragment);
   if (!textPlain) return null;
 
   return { textPlain, textHtml };
+}
+
+/**
+ * 单元格按文本复制，保留换行但不生成强调或列表标记。
+ * @param {Node} node 经过公式替换的选区副本。
+ * @returns {string} 单元格文本。
+ */
+function serializeCellText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (node instanceof Element) {
+    if (node.matches('button,script,style,svg,[aria-hidden="true"]')) return '';
+    if (node.tagName === 'BR') return '\n';
+  }
+  const text = Array.from(node.childNodes).map(serializeCellText).join('');
+  return node instanceof Element && node.matches('p,div,pre') ? `${text}\n` : text;
+}
+
+/**
+ * 克隆选中文字并补回共同祖先的格式外壳，不复制祖先的兄弟节点或其他正文。
+ * Range.cloneContents 不包含共同祖先本身，因此仅选中 strong/code 内部文字时需要补壳。
+ * @param {Range} range 已按公式边界调整的克隆选区。
+ * @param {Element | null} inlineItem 局部文字所在的列表项，补壳到此即停止。
+ * @returns {DocumentFragment} 包含必要上下文的选区片段。
+ */
+function cloneSelectionWithContext(range: Range, inlineItem: Element | null): DocumentFragment {
+  const fragment = range.cloneContents();
+  let ancestor = getContainingElement(range.commonAncestorContainer);
+  const scope = ancestor?.closest(CONTENT_SELECTOR) ?? document.body;
+  while (ancestor && ancestor !== inlineItem && !ancestor.matches(`${CONTENT_SELECTOR},body,html,section[data-turn]`)) {
+    const shell = ancestor.cloneNode(false) as Element;
+    shell.append(fragment);
+    fragment.append(shell);
+    ancestor = ancestor.parentElement;
+  }
+  // 克隆可能只包含列表中间的若干项；按原 DOM 的编号补齐 start，不能重新从 1 编号。
+  const sourceLists = Array.from(scope.querySelectorAll<HTMLElement>('ol')).filter((list) => range.intersectsNode(list));
+  const clonedLists = Array.from(fragment.querySelectorAll<HTMLElement>('ol'));
+  if (sourceLists.length === clonedLists.length) {
+    sourceLists.forEach((list, index) => {
+      const items = Array.from(list.children).filter((child) => child.tagName.toLowerCase() === 'li');
+      const firstSelected = items.findIndex((item) => range.intersectsNode(item));
+      if (firstSelected >= 0) clonedLists[index].setAttribute('start', String(getOrderedListItemNumbers(list)[firstSelected]));
+    });
+  }
+  return fragment;
 }
 
 /**
@@ -176,44 +220,37 @@ function replaceMathWithLatex(fragment: DocumentFragment): boolean {
 function serializeFragmentHtml(fragment: DocumentFragment): string {
   const container = fragment.ownerDocument.createElement('div');
   container.append(fragment.cloneNode(true));
+  replaceClipboardMath(container);
+  styleClipboardTables(container);
   return container.innerHTML;
 }
 
 /**
- * 将已替换公式的选区片段序列化为纯文本，并保留常见块级换行。
- *
- * @param {DocumentFragment} fragment 选区克隆。
- * @returns {string}
+ * 为剪贴板副本添加独立于网页 CSS 的表格样式，便于 Word 等富文本软件粘贴。
+ * 只突出原有 th 或 thead 中的单元格，不将数据行改成表头。
+ * @param {HTMLElement} container 剪贴板 HTML 副本容器。
+ * @returns {void}
  */
-function serializeFragmentText(fragment: DocumentFragment): string {
-  const raw = Array.from(fragment.childNodes).map(serializeTextNode).join('');
-  return raw
-    .replace(/\u00a0/g, ' ')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-/**
- * 按浏览器纯文本复制语义近似序列化单个节点。
- *
- * @param {ChildNode} node 当前节点。
- * @returns {string}
- */
-function serializeTextNode(node: ChildNode): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
-  if (node.nodeType !== Node.ELEMENT_NODE) return '';
-
-  const element = node as HTMLElement;
-  const tag = element.tagName.toLowerCase();
-  if (['button', 'script', 'style', 'svg'].includes(tag)) return '';
-  if (tag === 'br') return '\n';
-
-  const children = Array.from(element.childNodes).map(serializeTextNode).join('');
-  if (tag === 'td' || tag === 'th') return `${children}\t`;
-  if (BLOCK_TEXT_TAGS.has(tag)) return `\n${children}\n`;
-  return children;
+function styleClipboardTables(container: HTMLElement): void {
+  for (const table of container.querySelectorAll<HTMLTableElement>('table')) {
+    table.setAttribute('border', '1');
+    table.setAttribute('cellspacing', '0');
+    table.setAttribute('cellpadding', '6');
+    table.style.borderCollapse = 'collapse';
+    table.style.border = '1px solid #808080';
+    table.style.color = '#000000';
+    table.style.backgroundColor = '#ffffff';
+    for (const cell of table.querySelectorAll<HTMLTableCellElement>('th,td')) {
+      if (cell.closest('table') !== table) continue;
+      const header = cell.tagName === 'TH' || cell.parentElement?.parentElement?.tagName === 'THEAD';
+      cell.style.border = '1px solid #808080';
+      cell.style.padding = '6px 8px';
+      cell.style.verticalAlign = 'top';
+      cell.style.color = '#000000';
+      cell.style.backgroundColor = header ? '#e8edf3' : '#ffffff';
+      if (header) cell.style.fontWeight = 'bold';
+    }
+  }
 }
 
 /**

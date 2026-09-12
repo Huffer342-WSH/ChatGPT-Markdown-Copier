@@ -23,7 +23,8 @@ describe('createMathSelectionClipboardPayload', () => {
     const payload = createMathSelectionClipboardPayload(selection);
 
     expect(payload?.textPlain).toBe(`$$${DISPLAY_LATEX}$$`);
-    expect(payload?.textHtml).toContain('katex-display');
+    expect(payload?.textHtml).toContain('display="block"');
+    expect(payload?.textHtml).not.toContain('class="katex');
     expect(payload?.textHtml).toContain('application/x-tex');
     expect(selection.toString()).toBe('0.5');
   });
@@ -141,7 +142,8 @@ describe('handleMathSelectionCopy', () => {
     handleMathSelectionCopy(event);
 
     expect(clipboard.get('text/plain')).toBe('$q = 0.1$');
-    expect(clipboard.get('text/html')).toContain('katex');
+    expect(clipboard.get('text/html')).toContain('<math');
+    expect(clipboard.get('text/html')).not.toContain('class="katex');
     expect(preventDefault).toHaveBeenCalledOnce();
     expect(stopImmediatePropagation).toHaveBeenCalledOnce();
   });

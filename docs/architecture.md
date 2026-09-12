@@ -36,10 +36,11 @@ entrypoints/
   background.ts           # 背景脚本入口：当前仅保留最小壳层
 
 lib/
-  markdown.ts             # 保留的 DOM 序列化器，当前按钮不调用
+  markdown.ts             # DOM 序列化器，由选区复制复用
   official-markdown.ts    # 官方文本的行内公式分隔符修正
   math.ts                 # 数学公式边界识别、LaTeX 提取与分隔符生成
-  selection-copy.ts       # 公式选区复制与原生回退
+  clipboard-math.ts       # 富文本公式：LaTeX -> 独立 MathML，失败时保留可见源码
+  selection-copy.ts       # Markdown 选区复制、公式边界扩展与原生回退
   i18n.ts                 # 扩展壳层 i18n 读取封装（chrome.i18n）
   web-i18n.ts             # 页面注入文案 i18n（i18next + html lang）
   content/
@@ -99,7 +100,7 @@ vitest.config.ts          # 测试收集范围和执行池
 
 ### `lib/markdown.ts`
 
-保留的 DOM 序列化模块，负责把 ChatGPT 消息 DOM 序列化为 Markdown；当前按钮不调用此模块。
+DOM 序列化模块，负责把消息或选区 DOM 序列化为 Markdown。选区复制通过 `serializeSelectionDomToMarkdown` 复用此模块；整条回复按钮仍使用官方输出。
 
 当前支持的重点结构包括：
 
@@ -126,11 +127,20 @@ vitest.config.ts          # 测试收集范围和执行池
 
 ### `lib/selection-copy.ts`
 
-负责接管 ChatGPT 页面中包含公式的选区复制：
+负责恢复 ChatGPT 回复选区的 Markdown 格式：
 
 - 监听用户触发的同步 `copy` 事件
 - 将落在公式内部的选区端点扩展到完整公式边界
-- 在 `text/plain` 中输出 LaTeX，同时保留原选区 `text/html`
+- 补回共同祖先的格式外壳，不复制祖先的其他子节点；标题、加粗、链接、列表、引用与代码等格式可随局部选区保留
+- 同一列表项内部的文字选区不补 `li/ol/ul` 祖先，只保留文字格式；跨列表项或显式选择完整列表节点时保留编号和层级
+- 列表项按原 DOM 顺序输出段落、子列表及代码块，代码围栏和续行按父项编号宽度缩进
+- 单个单元格只输出文本；多个单元格或数据行输出管道行，仅在选中真实表头时添加表头分隔线。无表头的管道行不保证被 GFM 渲染为表格
+- 同次复制的 `text/html` 保留表格行列，并添加内联边框、黑字白底和表头底色/加粗，供 Word、Excel 等富文本粘贴使用；不影响 `text/plain` 中的 Markdown 或原页面。Office 实际粘贴尚未独立验证
+- HTML 中的公式使用本地 KaTeX 生成独立 Presentation MathML，并移除依赖网页 CSS 的 KaTeX 外壳；解析失败时输出可见 LaTeX 文本。Markdown 分支保持原格式，转换不请求远端服务
+- 无公式时，仅接管同一正文容器中的格式化内容；普通文字和可编辑区域保持原生复制
+- 在 `text/plain` 中输出 Markdown，在 `text/html` 中保留选区 DOM 和必要的格式上下文
+
+MathML 导入依据 [Microsoft 365 MathML 文档](https://learn.microsoft.com/en-us/office/math/mathml#mathml-in-html-import)。当前已核对实际网页只有 KaTeX HTML、无 MathML；自动化用例验证公式结构及 Markdown 不变。用户已确认更新 Edge 实际加载的开发目录后 Word 桌面版公式粘贴恢复正常；这不代表所有 Office 版本或 Excel 均已验证。
 - 普通文字、可编辑区域或缺失全部 LaTeX 源码时回退原生复制
 
 ### `lib/content/markdown-button.ts`
@@ -197,14 +207,15 @@ vitest.config.ts          # 测试收集范围和执行池
 - 正确定位当前 assistant 消息
 - 捕获官方写入参数，并保留代码内容及其他 Markdown 格式
 
-公式选区复制是另一条独立但复用公式提取能力的流程：
+选区复制是另一条独立且复用 DOM 序列化器的流程：
 
 1. 用户在页面中触发复制
 2. 内容脚本验证选区非空且不在可编辑区域
 3. 若端点位于公式内部，将克隆 Range 扩展到完整公式边界
-4. 克隆选区 DOM，并用 annotation 或源码属性中的 LaTeX 替换公式渲染节点
-5. 同步写入 `text/plain` 与 `text/html`，阻止页面后续监听器覆盖结果
-6. 任一步无法安全完成时不取消事件，由浏览器执行原生复制
+4. 克隆选区 DOM，补回共同祖先的格式外壳；仅公式扩展边界，其他内容不扩大选区
+5. 读取公式源码并替换公式渲染节点，交给 DOM 序列化器生成 Markdown；代码内容不进行全局空行压缩
+6. 同步写入 `text/plain` 与 `text/html`，阻止页面后续监听器覆盖结果
+7. 任一步无法安全完成时不取消事件，由浏览器执行原生复制
 
 ## DOM 适配策略
 
@@ -229,7 +240,7 @@ vitest.config.ts          # 测试收集范围和执行池
 
 ## Markdown 序列化策略
 
-以下描述保留的 DOM 序列化器；当前按钮使用 `official-markdown.ts`，不走此流程。官方文本转换保守跳过围栏代码、缩进代码和反引号代码片段，只转换同一行内配对且不含美元符号或反引号的公式。
+以下描述选区复制复用的 DOM 序列化器；整条回复按钮使用 `official-markdown.ts`，不走此流程。官方文本转换保守跳过围栏代码、缩进代码和反引号代码片段，只转换同一行内配对且不含美元符号或反引号的公式。
 
 ### 正文区域提取
 
@@ -285,6 +296,8 @@ vitest.config.ts          # 测试收集范围和执行池
 ## 扩展配置
 
 项目使用 WXT 构建。
+
+构建目录取决于浏览器和模式：`pnpm build` 更新 `.output/chrome-mv3`；`pnpm build:edge` 更新 `.output/edge-mv3`；`pnpm build:edge:dev` 单次更新 `.output/edge-mv3-dev`。如果 Edge 加载的是开发目录而开发服务已停止，仅运行默认 build 不会更新已加载的扩展。构建后应在扩展管理页重新加载，并刷新 ChatGPT 页面。
 
 当前关键配置位于 [`wxt.config.ts`](../wxt.config.ts)：
 

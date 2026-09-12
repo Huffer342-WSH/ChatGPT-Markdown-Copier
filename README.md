@@ -79,6 +79,9 @@ export default defineWebExtConfig({
 通过“加载解压缩的扩展”选择项目的 `.output/edge-mv3-dev` 目录。
 若已安装正式版，请先禁用正式版，避免重复注入按钮。
 
+若开发服务已停止，可运行 `pnpm build:edge:dev` 单次更新此目录，然后重新加载扩展并刷新页面。
+`pnpm build` 只更新 `.output/chrome-mv3`，不会更新 Edge 开发目录；`pnpm build:edge` 则输出到 `.output/edge-mv3`。
+
 打开 ChatGPT 页面，按 `F12`，在 Sources 的 Content scripts 中设置断点，
 在 Console 中搜索 `[MD-COPY]` 查看错误日志。保存代码后开发服务会重新构建；
 如果页面未更新，请重新加载扩展并刷新页面。内容脚本更新可能刷新页面，建议使用已完成的会话调试。
