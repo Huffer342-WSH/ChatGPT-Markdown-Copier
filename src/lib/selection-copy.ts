@@ -144,6 +144,7 @@ function serializeCellText(node: Node): string {
 /**
  * 克隆选中文字并补回共同祖先的格式外壳，不复制祖先的兄弟节点或其他正文。
  * Range.cloneContents 不包含共同祖先本身，因此仅选中 strong/code 内部文字时需要补壳。
+ * 显式选取单个 li 内容时只补到直属列表，避免带入未选中的外层空列表项。
  * @param {Range} range 已按公式边界调整的克隆选区。
  * @param {Element | null} inlineItem 局部文字所在的列表项，补壳到此即停止。
  * @returns {DocumentFragment} 包含必要上下文的选区片段。
@@ -152,14 +153,18 @@ function cloneSelectionWithContext(range: Range, inlineItem: Element | null): Do
   const fragment = range.cloneContents();
   let ancestor = getContainingElement(range.commonAncestorContainer);
   const scope = ancestor?.closest(CONTENT_SELECTOR) ?? document.body;
+  const itemList = ancestor?.matches('li') && range.startContainer === ancestor && range.endContainer === ancestor
+    ? ancestor.parentElement : null;
   while (ancestor && ancestor !== inlineItem && !ancestor.matches(`${CONTENT_SELECTOR},body,html,section[data-turn]`)) {
     const shell = ancestor.cloneNode(false) as Element;
     shell.append(fragment);
     fragment.append(shell);
+    if (ancestor === itemList) break;
     ancestor = ancestor.parentElement;
   }
   // 克隆可能只包含列表中间的若干项；按原 DOM 的编号补齐 start，不能重新从 1 编号。
-  const sourceLists = Array.from(scope.querySelectorAll<HTMLElement>('ol')).filter((list) => range.intersectsNode(list));
+  const sourceLists = Array.from(scope.querySelectorAll<HTMLElement>('ol')).filter((list) =>
+    range.intersectsNode(list) && (!itemList || list === itemList || itemList.contains(list)));
   const clonedLists = Array.from(fragment.querySelectorAll<HTMLElement>('ol'));
   if (sourceLists.length === clonedLists.length) {
     sourceLists.forEach((list, index) => {
