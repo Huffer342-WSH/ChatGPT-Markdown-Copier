@@ -1,4 +1,7 @@
 {
+  "originalCopyButtonIdle": "Copy response",
+  "originalCopyButtonLoading": "Copying",
+  "originalCopyButtonSuccess": "Response copied",
   "mdCopyButtonIdle": "Copy Markdown",
   "mdCopyButtonLoading": "Preparing Markdown",
   "mdCopyButtonLoadingTooltip": "Preparing Markdown...",

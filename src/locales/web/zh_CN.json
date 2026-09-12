@@ -1,4 +1,7 @@
 {
+  "originalCopyButtonIdle": "复制回复",
+  "originalCopyButtonLoading": "正在复制",
+  "originalCopyButtonSuccess": "回复已复制",
   "mdCopyButtonIdle": "复制 Markdown",
   "mdCopyButtonLoading": "正在准备 Markdown",
   "mdCopyButtonLoadingTooltip": "正在准备 Markdown...",

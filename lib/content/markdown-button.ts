@@ -15,6 +15,7 @@ const BUTTON_TEXT_IDLE = '复制 Markdown';
 const BUTTON_TEXT_LOADING = '正在准备 Markdown';
 const BUTTON_TEXT_SUCCESS = 'Markdown 已复制';
 const BUTTON_TEXT_ERROR = '复制失败，点击重试';
+const stateTimers = new WeakMap<HTMLButtonElement, number>();
 
 /**
  * 创建 Markdown 复制按钮。
@@ -42,6 +43,25 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
 }
 
 /**
+ * 创建原样复制按钮，复用官方图标和样式，但不复制其标识、事件和状态。
+ * @param {HTMLButtonElement} officialButton 隐藏前的官方按钮。
+ * @returns {HTMLButtonElement} 独立管理反馈的可见按钮。
+ */
+export function createOriginalCopyButton(officialButton: HTMLButtonElement): HTMLButtonElement {
+  const button = createMarkdownButton(officialButton);
+  button.dataset.copyMode = 'original';
+  const wrapper = button.querySelector<HTMLElement>('.md-copy-icon-wrap')!;
+  const originalIcon = document.createElement('span');
+  originalIcon.className = 'md-copy-icon md-copy-icon-main';
+  for (const child of Array.from(officialButton.childNodes)) {
+    originalIcon.append(child.cloneNode(true));
+  }
+  wrapper.querySelector('.md-copy-icon-main')!.replaceWith(originalIcon);
+  refreshButtonLocale(button);
+  return button;
+}
+
+/**
  * 更新按钮状态（默认/加载/成功/失败）。
  *
  * @param {HTMLButtonElement} button 目标按钮。
@@ -49,6 +69,8 @@ export function createMarkdownButton(officialButton: HTMLButtonElement): HTMLBut
  * @returns {void}
  */
 export function setButtonState(button: HTMLButtonElement, state: ButtonState): void {
+  window.clearTimeout(stateTimers.get(button));
+  stateTimers.delete(button);
   button.dataset.state = state;
   refreshButtonLocale(button);
 
@@ -59,19 +81,19 @@ export function setButtonState(button: HTMLButtonElement, state: ButtonState): v
     return;
   }
   if (state === 'success') {
-    window.setTimeout(() => {
+    stateTimers.set(button, window.setTimeout(() => {
       if (button.dataset.state === 'success') {
         setButtonState(button, 'idle');
       }
-    }, 2000);
+    }, 2000));
     return;
   }
 
-  window.setTimeout(() => {
+  stateTimers.set(button, window.setTimeout(() => {
     if (button.dataset.state === 'error') {
       setButtonState(button, 'idle');
     }
-  }, 2000);
+  }, 2000));
 }
 
 /**
@@ -99,7 +121,7 @@ export function installMarkdownButtonStyles(): void {
  */
 export function refreshButtonLocale(button: HTMLButtonElement): void {
   const state = normalizeButtonState(button.dataset.state);
-  const { ariaLabel, tooltipText } = getButtonCopyText(state);
+  const { ariaLabel, tooltipText } = getButtonCopyText(state, button.dataset.copyMode === 'original');
   button.setAttribute('aria-label', ariaLabel);
   button.dataset.tooltip = tooltipText;
   refreshTooltipText(button);
@@ -143,9 +165,17 @@ function normalizeButtonState(state: string | undefined): ButtonState {
  * 获取按钮状态对应的文案。
  *
  * @param {ButtonState} state 按钮状态。
+ * @param {boolean} original 是否为原样复制按钮。
  * @returns {{ ariaLabel: string; tooltipText: string }}
  */
-function getButtonCopyText(state: ButtonState): { ariaLabel: string; tooltipText: string } {
+function getButtonCopyText(state: ButtonState, original: boolean): { ariaLabel: string; tooltipText: string } {
+  if (original) {
+    const text = state === 'loading' ? tWeb('originalCopyButtonLoading', '正在复制')
+      : state === 'success' ? tWeb('originalCopyButtonSuccess', '回复已复制')
+      : state === 'error' ? tWeb('mdCopyButtonError', BUTTON_TEXT_ERROR)
+      : tWeb('originalCopyButtonIdle', '复制回复');
+    return { ariaLabel: text, tooltipText: text };
+  }
   if (state === 'loading') {
     return {
       ariaLabel: tWeb('mdCopyButtonLoading', BUTTON_TEXT_LOADING),

@@ -1,21 +1,22 @@
 /**
  * 内容脚本入口：负责监听 ChatGPT 页面变化、注入 Markdown 复制按钮，
- * 并串联“定位消息 -> DOM 序列化 -> 写入剪贴板”的主流程。
+ * 并通过页面主环境桥接复用官方复制结果。
  */
 
 import {
   createMarkdownButton,
+  createOriginalCopyButton,
   installMarkdownButtonStyles,
   refreshButtonLocale,
   setButtonState,
 } from '../lib/content/markdown-button';
-import { findMessageRoot, isAssistantTurnButton, logMarkdownCopyDebugDom } from '../lib/content/message-root';
-import { serializeMessageDomToMarkdown } from '../lib/markdown';
+import { isAssistantTurnButton } from '../lib/content/message-root';
 import { installMathSelectionCopy } from '../lib/selection-copy';
 import { initWebI18n, syncWebLanguageFromHtml } from '../lib/web-i18n';
 
 const ENHANCED_ATTR = 'data-md-copy-enhanced';
 const MARKDOWN_BUTTON_SELECTOR = 'button.md-copy-button';
+const activeCopies = new WeakSet<HTMLButtonElement>();
 
 export default defineContentScript({
   matches: ['https://chatgpt.com/*'],
@@ -99,7 +100,7 @@ function installLangObserver(): void {
 }
 
 /**
- * 扫描官方复制按钮并在其旁边添加 Markdown 按钮。
+ * 隐藏官方按钮，并排放置原样复制与 Markdown 按钮；保留原节点供页面调用。
  *
  * @returns {void}
  */
@@ -113,10 +114,15 @@ function enhanceExistingButtons(): void {
     if (!isAssistantTurnButton(officialButton)) continue;
 
     const markdownButton = createMarkdownButton(officialButton);
+    const originalCopyButton = createOriginalCopyButton(officialButton);
     markdownButton.addEventListener('click', () => {
       void handleMarkdownCopy(markdownButton, officialButton);
     });
-    officialButton.insertAdjacentElement('afterend', markdownButton);
+    originalCopyButton.addEventListener('click', () => {
+      handleOriginalCopy(originalCopyButton, officialButton);
+    });
+    officialButton.after(originalCopyButton, markdownButton);
+    officialButton.style.setProperty('display', 'none', 'important');
   }
 }
 
@@ -145,9 +151,8 @@ function refreshEnhancedButtonsLocale(): void {
 
 /**
  * 核心流程：
- * 1) 定位当前 assistant 消息 DOM
- * 2) 直接序列化为 Markdown
- * 3) 写入剪贴板
+ * 同步请求页面主环境执行官方复制，在浏览器确认写入后更新按钮。
+ * 不读取系统剪贴板；未捕获时显示失败，保留原样复制入口。
  *
  * @param {HTMLButtonElement} markdownButton 自定义 Markdown 按钮实例。
  * @param {HTMLButtonElement} officialButton 同一条消息对应的官方复制按钮。
@@ -157,21 +162,63 @@ async function handleMarkdownCopy(
   markdownButton: HTMLButtonElement,
   officialButton: HTMLButtonElement,
 ): Promise<void> {
+  if (activeCopies.has(officialButton)) return;
+  activeCopies.add(officialButton);
   setButtonState(markdownButton, 'loading');
-
-  try {
-    const messageRoot = findMessageRoot(officialButton);
-    if (!messageRoot) {
-      logMarkdownCopyDebugDom(officialButton);
-      throw new Error('Cannot find assistant message root');
+  /** @param {string} state 主环境报告的结果或超时状态。 */
+  const finish = (state: string): void => {
+    window.clearTimeout(timer);
+    activeCopies.delete(officialButton);
+    officialButton.removeEventListener('md-copy-official-result', onResult);
+    if (state === 'success') setButtonState(markdownButton, 'success');
+    else {
+      setButtonState(markdownButton, 'error');
+      console.warn('[MD-COPY] Markdown bridge unavailable:', state);
     }
+  };
+  /** @param {Event} event 页面桥接结果。 */
+  const onResult = (event: Event): void => {
+    const state = (event as CustomEvent<unknown>).detail;
+    if (state === 'success' || state === 'error' || state === 'unsupported') finish(state);
+  };
+  const timer = window.setTimeout(() => finish('timeout'), 5000);
+  officialButton.addEventListener('md-copy-official-result', onResult);
+  officialButton.dispatchEvent(new Event('md-copy-official-request', { bubbles: true }));
+}
 
-    const finalMarkdown = serializeMessageDomToMarkdown(messageRoot);
-    await navigator.clipboard.writeText(finalMarkdown);
-    setButtonState(markdownButton, 'success');
+/**
+ * 直接触发原按钮，不经过主环境桥接、不包装剪贴板；只观察官方成功提示。
+ * 此反馈代表页面报告成功，不代表扩展读取并核验了系统剪贴板。
+ * @param {HTMLButtonElement} visibleButton 可见的原样复制按钮。
+ * @param {HTMLButtonElement} officialButton 隐藏的官方按钮。
+ * @returns {void}
+ */
+function handleOriginalCopy(visibleButton: HTMLButtonElement, officialButton: HTMLButtonElement): void {
+  if (activeCopies.has(officialButton)) return;
+  activeCopies.add(officialButton);
+  setButtonState(visibleButton, 'loading');
+  let finished = false;
+  /** @param {boolean} success 是否观察到官方成功提示。 */
+  const finish = (success: boolean): void => {
+    if (finished) return;
+    finished = true;
+    observer.disconnect();
+    window.clearTimeout(timer);
+    activeCopies.delete(officialButton);
+    setButtonState(visibleButton, success ? 'success' : 'error');
+  };
+  /** 跟随官方成功提示，包括短时间内再次点击时官方仍保持成功的情况。 */
+  const checkStatus = (): void => {
+    if (/copied|已复制/i.test(officialButton.getAttribute('aria-label') ?? '')) finish(true);
+  };
+  const observer = new MutationObserver(checkStatus);
+  observer.observe(officialButton, { attributes: true, attributeFilter: ['aria-label'], childList: true, subtree: true });
+  const timer = window.setTimeout(() => finish(false), 5000);
+  try {
+    officialButton.click();
+    checkStatus();
   } catch (error) {
-    console.warn('[MD-COPY] markdown copy failed', error);
-    logMarkdownCopyDebugDom(officialButton);
-    setButtonState(markdownButton, 'error');
+    console.warn('[MD-COPY] original copy failed', error);
+    finish(false);
   }
 }
