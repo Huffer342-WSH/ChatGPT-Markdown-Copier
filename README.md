@@ -62,7 +62,28 @@ pnpm run dev
 
 > 说明：`pnpm run dev` 启动的浏览器访问ChatGPT会一直触发机器人检查，建议在日常浏览器通过“加载已解压的扩展程序”进行调试。
 
-### 常用命令
+### 使用日常 Edge 调试
+
+在项目根目录创建 `web-ext.config.ts`（已被 Git 忽略）：
+
+```ts
+import { defineWebExtConfig } from 'wxt';
+
+export default defineWebExtConfig({
+  // 手动使用已登录的浏览器，不自动打开开发浏览器。
+  disabled: true,
+});
+```
+
+运行 `pnpm dev:edge`，保持终端运行。在 `edge://extensions/` 开启开发人员模式，
+通过“加载解压缩的扩展”选择项目的 `.output/edge-mv3-dev` 目录。
+若已安装正式版，请先禁用正式版，避免重复注入按钮。
+
+打开 ChatGPT 页面，按 `F12`，在 Sources 的 Content scripts 中设置断点，
+在 Console 中搜索 `[MD-COPY]` 查看错误日志。保存代码后开发服务会重新构建；
+如果页面未更新，请重新加载扩展并刷新页面。内容脚本更新可能刷新页面，建议使用已完成的会话调试。
+
+### 检查与打包
 
 ```bash
 pnpm run compile   # TypeScript 类型检查
