@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { serializeMessageDomToMarkdown } from './markdown';
+import { serializeMessageDomToMarkdown } from '../lib/markdown';
 
 const INLINE_LATEX = String.raw`x^{k+1}=L_{\mathrm{cyc}}^{-1}R_{\mathrm{cyc}}x^k+L_{\mathrm{cyc}}^{-1}A^\top b`;
 const DISPLAY_LATEX = String.raw`H = \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix}`;
@@ -10,7 +10,7 @@ beforeEach(() => {
   document.body.replaceChildren();
 });
 
-describe('serializeMessageDomToMarkdown 数学公式回归', () => {
+describe('保留的 DOM 序列化器（非当前按钮主流程）', () => {
   it('保留原有按钮对行内 KaTeX annotation 的转换', () => {
     const messageRoot = createMessageRoot();
     const paragraph = document.createElement('p');

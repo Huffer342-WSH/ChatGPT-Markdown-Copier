@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createMathSelectionClipboardPayload,
   handleMathSelectionCopy,
-} from './selection-copy';
+} from '../lib/selection-copy';
 
 const DISPLAY_LATEX = String.raw`H = \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix}`;
 

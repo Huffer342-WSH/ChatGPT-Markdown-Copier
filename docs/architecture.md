@@ -27,6 +27,8 @@
 
 ## 目录结构
 
+测试覆盖范围、持续测试命令与证据边界见 [tests/README.md](../tests/README.md)。
+
 ```text
 entrypoints/
   content.ts              # 内容脚本入口：观察 DOM、注入按钮、触发复制流程
@@ -62,6 +64,9 @@ assets/
 
 docs/
   architecture.md         # 当前文档
+
+tests/                    # 自动化测试与持续测试说明
+vitest.config.ts          # 测试收集范围和执行池
 ```
 
 ## 模块职责
