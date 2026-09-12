@@ -37,8 +37,8 @@ async function request(path, headers, method = 'GET', body) {
   const response = await fetch(`${origin}${path}`, {
     method, headers, body, redirect: 'error', signal: AbortSignal.timeout(120_000),
   });
-  const expected = method === 'POST' ? 202 : 200;
-  if (response.status !== expected) {
+  const accepted = method === 'POST' ? response.status === 202 : [200, 202].includes(response.status);
+  if (!accepted) {
     throw new Error(`${method} 请求失败：HTTP ${response.status}；请检查 Partner Center 后再重试。`);
   }
   return response;
@@ -73,8 +73,12 @@ async function main() {
   const tag = required('RELEASE_TAG');
   const zip = loadPackage(tag);
   const base = `/v1/products/${product}/submissions`;
-  const upload = await request(`${base}/draft/package`, { ...headers, 'Content-Type': 'application/zip' }, 'POST', zip);
-  const uploadId = operationId(upload);
+  let uploadId = process.env.EDGE_RESUME_UPLOAD_ID?.trim();
+  if (uploadId && !/^[a-zA-Z0-9-]+$/.test(uploadId)) throw new Error('无效的续传操作 ID。');
+  if (!uploadId) {
+    const upload = await request(`${base}/draft/package`, { ...headers, 'Content-Type': 'application/zip' }, 'POST', zip);
+    uploadId = operationId(upload);
+  }
   report(`上传操作 ID：${uploadId}`);
   await waitForOperation(`${base}/draft/package/operations/${uploadId}`, headers, '上传');
   const submission = await request(base, { ...headers, 'Content-Type': 'application/json' }, 'POST', JSON.stringify({ notes: `Release ${tag}` }));

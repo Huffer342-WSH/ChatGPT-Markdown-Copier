@@ -144,5 +144,6 @@ jobs:
           EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           EDGE_PRODUCT_ID: ${{ vars.EDGE_PRODUCT_ID }}
+          EDGE_RESUME_UPLOAD_ID: ${{ vars.EDGE_RESUME_UPLOAD_ID }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/publish-edge.mjs
