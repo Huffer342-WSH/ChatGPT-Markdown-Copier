@@ -4,7 +4,7 @@
     "description": "扩展名称"
   },
   "extDescription": {
-    "message": "为 ChatGPT 回复增加 Markdown 复制按钮",
+    "message": "将 ChatGPT 回复或选中内容复制为 Markdown，保留公式、代码、列表和表格，并支持向 Word 粘贴公式与带格式表格。",
     "description": "扩展描述"
   }
 }

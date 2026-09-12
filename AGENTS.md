@@ -16,6 +16,9 @@
 - 新增或重写的函数/模块应补充 docstring，并遵循 JSDoc 规范。
 - 注释与 docstring 默认使用中文（如无特殊要求）。
 
+## PR 合入规则
+- PR 合入 `main` 使用 Rebase不使用 merge
+
 ## 维护说明
 - Agent 在必要时可以主动维护本文件，确保其与项目当前状态一致。
 - 具体实现、模块细节和架构说明应优先维护在 `docs/architecture.md`，避免在本文件中堆积过多细节。

@@ -4,7 +4,7 @@
     "description": "Extension name"
   },
   "extDescription": {
-    "message": "Add a Markdown copy button for ChatGPT responses",
+    "message": "Copy ChatGPT replies and selections as Markdown, with LaTeX support and formatted formulas and tables for Word.",
     "description": "Extension description"
   }
 }
