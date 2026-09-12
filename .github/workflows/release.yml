@@ -55,6 +55,7 @@ jobs:
         with:
           name: edge-store-package
           path: .output/*-chrome.zip
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Decide release type by tag name

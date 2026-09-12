@@ -23,9 +23,6 @@
     "vitest": "^4.1.10",
     "wxt": "^0.20.20"
   },
-  "optionalDependencies": {
-    "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.13"
-  },
   "dependencies": {
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.2.1"
