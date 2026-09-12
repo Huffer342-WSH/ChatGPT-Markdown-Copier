@@ -16,6 +16,8 @@ jobs:
   release:
     name: Build and Publish Release
     runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.classify.outputs.prerelease }}
 
     steps:
       - name: Checkout
@@ -26,12 +28,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.14.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -40,8 +42,20 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check types and tests
+        run: |
+          pnpm run compile
+          pnpm run test
+
       - name: Package extension
         run: pnpm zip
+
+      - name: Preserve package for store submission
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-store-package
+          path: .output/*-chrome.zip
+          if-no-files-found: error
 
       - name: Decide release type by tag name
         id: classify
@@ -81,6 +95,20 @@ jobs:
             --output RELEASE_NOTES.md \
             "${EXTRA_ARGS[@]}"
 
+      - name: Include curated changelog
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          version = os.environ['GITHUB_REF_NAME'].removeprefix('v')
+          changelog = pathlib.Path('CHANGELOG.md').read_text(encoding='utf-8')
+          section = re.search(r'^## ' + re.escape(version) + r'[^\n]*\n(.*?)(?=^## |\Z)', changelog, re.M | re.S)
+          if section:
+              notes = pathlib.Path('RELEASE_NOTES.md')
+              notes.write_text(section.group(1).strip() + '\n\n---\n\n' + notes.read_text(encoding='utf-8'), encoding='utf-8')
+          PY
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -89,3 +117,31 @@ jobs:
           prerelease: ${{ steps.classify.outputs.prerelease }}
           body_path: RELEASE_NOTES.md
           files: .output/*.zip
+
+  edge-store:
+    name: Submit to Edge Add-ons
+    needs: release
+    if: needs.release.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    concurrency:
+      group: edge-store-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: edge-store-package
+          path: .output/store
+      - name: Upload and submit package
+        env:
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          EDGE_PRODUCT_ID: ${{ vars.EDGE_PRODUCT_ID }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/publish-edge.mjs
