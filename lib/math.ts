@@ -26,12 +26,13 @@ export function isInlineMathElement(element: HTMLElement): boolean {
 }
 
 /**
- * 判断元素是否为块级数学公式根节点。
+ * 判断元素是否为块级数学公式根节点，避免将包含公式的普通正文容器误判为公式。
  *
  * @param {HTMLElement} element 待判断元素。
  * @returns {boolean}
  */
 export function isDisplayMathElement(element: HTMLElement): boolean {
+  if (!isMathElement(element)) return false;
   if (element.classList.contains('katex-display')) return true;
   if (element.closest(KATEX_DISPLAY_SELECTOR)) return true;
   if (element.querySelector(KATEX_DISPLAY_SELECTOR)) return true;
