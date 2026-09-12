@@ -21,7 +21,7 @@ beforeEach(async () => {
   results = [];
   button.addEventListener('md-copy-official-result', (event) => results.push((event as CustomEvent<string>).detail));
   const registration = vi.spyOn(document, 'addEventListener');
-  const entry = await import('../entrypoints/official-copy.content');
+  const entry = await import('../src/entrypoints/official-copy.content');
   entry.default.main({} as never);
   listener = registration.mock.calls.find(([type]) => type === 'md-copy-official-request')![1] as EventListener;
 });

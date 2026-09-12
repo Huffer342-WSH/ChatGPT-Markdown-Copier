@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createMathSelectionClipboardPayload, handleMathSelectionCopy } from '../lib/selection-copy';
+import { createMathSelectionClipboardPayload, handleMathSelectionCopy } from '../src/lib/selection-copy';
 
 beforeEach(() => { document.body.innerHTML = '<div class="markdown"></div>'; });
 afterEach(() => {

@@ -2,6 +2,8 @@ import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
+  srcDir: 'src',
+  publicDir: 'src/public',
   modules: ['@wxt-dev/auto-icons'],
   vite: () => ({
     plugins: [{
@@ -25,6 +27,6 @@ export default defineConfig({
     name: '__MSG_extName__',
     description: '__MSG_extDescription__',
     host_permissions: ['https://chatgpt.com/*'],
-    permissions: ['clipboardWrite'],
+    permissions: ['clipboardWrite', 'storage'],
   },
 });

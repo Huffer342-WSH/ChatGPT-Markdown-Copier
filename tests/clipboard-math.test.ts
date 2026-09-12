@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMathSelectionClipboardPayload } from '../lib/selection-copy';
+import { createMathSelectionClipboardPayload } from '../src/lib/selection-copy';
 
 afterEach(() => {
   window.getSelection()?.removeAllRanges();

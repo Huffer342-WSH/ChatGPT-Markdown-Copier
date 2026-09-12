@@ -11,6 +11,7 @@ import {
 } from './math';
 import { getOrderedListItemNumbers, serializeSelectionDomToMarkdown } from './markdown';
 import { replaceClipboardMath } from './clipboard-math';
+import { observeBooleanSetting, PLAIN_CODE_KEY } from './settings/storage';
 
 const EDITABLE_SELECTOR =
   'input, textarea, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
@@ -23,6 +24,7 @@ export interface MathSelectionClipboardPayload {
 }
 
 let isSelectionCopyInstalled = false;
+let copyCodeWithoutMarkers = true;
 
 /**
  * 安装数学公式选区复制监听器。
@@ -31,6 +33,8 @@ let isSelectionCopyInstalled = false;
  */
 export function installMathSelectionCopy(): void {
   if (isSelectionCopyInstalled) return;
+  void observeBooleanSetting(PLAIN_CODE_KEY, (enabled) => { copyCodeWithoutMarkers = enabled; })
+    .catch((error) => console.warn('[MD-COPY] Failed to load code copy setting', error));
   window.addEventListener('copy', handleMathSelectionCopy, true);
   isSelectionCopyInstalled = true;
 }
@@ -76,11 +80,13 @@ export function createMathSelectionClipboardPayload(
     return null;
   }
 
-  // 同一代码块内部只复制选中的代码，保留原始空白，不生成 Markdown 围栏。
-  const startPre = getContainingElement(sourceRange.startContainer)?.closest('pre');
-  const endPre = getContainingElement(sourceRange.endContainer)?.closest('pre');
-  if (startPre && startPre === endPre && startPre.closest(CONTENT_SELECTOR)) {
-    const code = document.createElement('pre');
+  // 仅在同一代码段内按设置省略标记；跨越代码边界仍走完整 Markdown 序列化。
+  const startElement = getContainingElement(sourceRange.startContainer);
+  const endElement = getContainingElement(sourceRange.endContainer);
+  const startCode = startElement?.closest('pre') ?? startElement?.closest('code');
+  const endCode = endElement?.closest('pre') ?? endElement?.closest('code');
+  if (copyCodeWithoutMarkers && startCode && startCode === endCode && startCode.closest(CONTENT_SELECTOR)) {
+    const code = document.createElement(startCode.tagName === 'PRE' ? 'pre' : 'code');
     code.textContent = sourceRange.toString();
     return { textPlain: code.textContent, textHtml: code.outerHTML };
   }

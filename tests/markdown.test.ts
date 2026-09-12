@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { serializeMessageDomToMarkdown } from '../lib/markdown';
+import { serializeMessageDomToMarkdown } from '../src/lib/markdown';
 
 const INLINE_LATEX = String.raw`x^{k+1}=L_{\mathrm{cyc}}^{-1}R_{\mathrm{cyc}}x^k+L_{\mathrm{cyc}}^{-1}A^\top b`;
 const DISPLAY_LATEX = String.raw`H = \begin{pmatrix} 1 & 0.5 \\ 0.5 & 1 \end{pmatrix}`;

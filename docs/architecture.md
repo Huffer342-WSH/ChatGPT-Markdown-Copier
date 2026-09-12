@@ -1,370 +1,144 @@
 # 架构与实现说明
 
-## 项目概览
+本扩展面向 ChatGPT 回复，提供整条回复复制、选区 Markdown 复制和行内代码选中功能。源码与扩展资源统一放在 `src/`，测试位于 `tests/`。本文按功能说明行为、实现和代码入口。
 
-本项目是一个面向 `https://chatgpt.com/*` 的 Chrome 扩展。
-它在 ChatGPT 官方回复操作区隐藏真正的官方按钮，并排显示“复制回复”和“复制 Markdown”两个按钮，保留官方节点和事件处理器。“复制回复”复用官方图标、原样传递官方输出；“复制 Markdown”修正行内公式。两个可见按钮独立维护状态，隐藏按钮的状态变化不会显示。
+## 1. 回复复制按钮
 
-当前实现选择了一个非常直接的路线：
+每条助手回复显示“复制回复”和“复制 Markdown”两个按钮。原来的官方按钮被隐藏，但节点和事件处理器仍保留，供扩展调用。
 
-- 不调用 ChatGPT 私有接口
-- 不依赖页面外部服务
-- 触发官方按钮，在页面主环境中转换其剪贴板写入参数
-- 只将代码区域外的 `\(...\)` 转为 `$...$`，保留其他官方输出
+### 挂载与页面更新
 
-转换只覆盖官方点击同步调用栈内发起的 `writeText` / `write`；调用返回后立即恢复原方法。原样复制直接调用隐藏按钮，不依赖 MAIN 桥接、不包装剪贴板，以官方 aria-label 的“已复制”/“copied”提示驱动自己的反馈。同一条回复同时只允许一次复制，结果仅更新触发按钮。失败或超时只更新触发按钮的错误状态，不移除两个按钮。Edge 已验证原样复制、重复点击、Markdown 成功反馈及超过 5 秒后按钮仍正常存在，未发现扩展错误日志；系统剪贴板正文未独立核验。
+内容脚本在 `document_start` 安装选区复制和行内代码交互监听；正文可用后初始化语言、样式和按钮。通过 `MutationObserver` 扫描后续生成的回复，以官方复制按钮为锚点识别助手消息，并用标记防止重复挂载。
 
-## 设计目标
+代码定位：[content.ts](../src/entrypoints/content.ts) 的 `bootstrapContentScript`、`enhanceExistingButtons`；[message-root.ts](../src/lib/content/message-root.ts) 负责助手消息识别；[markdown-button.ts](../src/lib/content/markdown-button.ts) 和 [tooltip.ts](../src/lib/content/tooltip.ts) 负责按钮状态与提示。
 
-项目当前优先级如下：
+### 原样复制
 
-1. 复制结果正确
-2. 数学公式和代码块不失真
-3. 按钮注入稳定，不错位、不重复
-4. 结构简单，便于随 ChatGPT UI 变化持续维护
+“复制回复”直接触发隐藏官方按钮的 `click()`，不转换文本。扩展观察官方按钮的 `aria-label` 判断是否显示复制成功，五秒内没有成功反馈则显示失败。此状态来自官方 UI，不是读取剪贴板进行核验。
 
-这意味着在实现取舍上，项目更偏向“稳定可维护”，而不是“抽象最完美”。
+代码定位：[content.ts](../src/entrypoints/content.ts) 的 `handleOriginalCopy`。
 
-## 目录结构
+### Markdown 复制
 
-测试覆盖范围、持续测试命令与证据边界见 [tests/README.md](../tests/README.md)。
+“复制 Markdown”复用官方生成的文本，只修正代码区域外的行内公式分隔符，将符合规则的 `\(...\)` 转为 `$...$`。围栏代码、缩进代码和反引号代码片段跳过转换。
 
-```text
-entrypoints/
-  content.ts              # 内容脚本入口：观察 DOM、注入按钮、触发复制流程
-  official-copy.content.ts # MAIN 环境：调用官方按钮并转换剪贴板参数
-  background.ts           # 背景脚本入口：当前仅保留最小壳层
+内容脚本运行在隔离环境，不能直接包装页面使用的剪贴板函数，因此通过 DOM 事件请求 MAIN 环境脚本处理：临时包装 `navigator.clipboard.writeText` 和 `write`，触发官方按钮，转换捕获到的纯文本参数，再调用原 API。若官方写入多种格式，只修改 `text/plain`。
 
-lib/
-  markdown.ts             # DOM 序列化器，由选区复制复用
-  official-markdown.ts    # 官方文本的行内公式分隔符修正
-  math.ts                 # 数学公式边界识别、LaTeX 提取与分隔符生成
-  clipboard-math.ts       # 富文本公式：LaTeX -> 独立 MathML，失败时保留可见源码
-  selection-copy.ts       # Markdown 选区复制、公式边界扩展与原生回退
-  i18n.ts                 # 扩展壳层 i18n 读取封装（chrome.i18n）
-  web-i18n.ts             # 页面注入文案 i18n（i18next + html lang）
-  content/
-    markdown-button.ts    # Markdown 按钮创建、状态管理、样式注入
-    tooltip.ts            # tooltip 挂载、定位、销毁与文案刷新
-    message-root.ts       # assistant 消息根节点定位与调试日志
+包装只存在于官方点击的同步调用栈中，调用返回后立即恢复。剪贴板 Promise 的完成结果通过事件回传给按钮。同一回复的两个按钮共用忙碌锁，避免复制操作重叠。
 
-src/
-  locales/web/
-    en.json               # 页面注入文案（英文）
-    zh_CN.json            # 页面注入文案（简体中文）
+代码定位：[content.ts](../src/entrypoints/content.ts) 的 `handleMarkdownCopy`；[official-copy.content.ts](../src/entrypoints/official-copy.content.ts) 的 `handleOfficialCopy`；[official-markdown.ts](../src/lib/official-markdown.ts) 的 `normalizeOfficialMarkdown`。
 
-public/
-  md-copy-main.svg        # 按钮默认图标
-  md-copy-check.svg       # 按钮成功态图标
-  _locales/
-    en/messages.json      # 扩展壳层文案（英文）
-    zh_CN/messages.json   # 扩展壳层文案（简体中文）
+边界：官方若异步发起写入、提前绑定剪贴板函数或改用其他复制方式，Markdown 模式可能无法捕获。整条回复复制不经过 DOM 序列化器。
 
-assets/
-  icon.png                # 扩展母图标（由 @wxt-dev/auto-icons 自动生成多尺寸图标）
+## 2. 选区 Markdown 复制
 
-docs/
-  architecture.md         # 当前文档
+用户选中正文并触发复制时，扩展从选区恢复 Markdown。操作只处理克隆的 Range 和 DOM，不改写页面正文，也不改变屏幕上的选区。
 
-tests/                    # 自动化测试与持续测试说明
-vitest.config.ts          # 测试收集范围和执行池
-```
+流程为：检查单一非空选区及编辑区域 → 判断是否直接复制代码 → 将公式端点扩展到完整公式 → 克隆选区并补回格式祖先 → 分别生成纯文本和 HTML → 在同步 `copy` 事件中写入剪贴板。
 
-## 模块职责
+成功接管后取消默认复制并阻止后续监听器覆盖结果。未满足接管条件或无法提取必要公式源码时，保留原生复制。普通无格式文字通常不需要扩展处理。
 
-### `entrypoints/content.ts`
+代码定位：[selection-copy.ts](../src/lib/selection-copy.ts) 的 `handleMathSelectionCopy`、`createMathSelectionClipboardPayload` 和 `cloneSelectionWithContext`；[markdown.ts](../src/lib/markdown.ts) 的 `serializeSelectionDomToMarkdown`。函数名中的 Math 是历史命名，当前已包含非公式格式恢复。
 
-内容脚本主入口，负责把各模块串起来。
+### 标题、强调、链接与引用
 
-主要职责：
+`Range.cloneContents()` 不保留共同祖先本身，因此会补回选区所在的标题、强调、链接等格式外壳，但不复制祖先的其他正文。随后由 DOM 序列化器输出 Markdown。
 
-- 在 `document_start` 时机先安装公式复制监听器，并在 `DOMContentLoaded` 后启动 UI
-- 安装按钮样式
-- 通过 `MutationObserver` 监听 ChatGPT SPA 页面变化
-- 扫描官方复制按钮，在 assistant 回复中隐藏原按钮并插入原样复制、Markdown 两个按钮
-- 同步发送 DOM 事件给 MAIN 桥接，等待真实剪贴板写入结果并更新状态
-- 安装公式选区 `copy` 监听器，使局部选中的公式按完整 LaTeX 复制
+代码定位：[selection-copy.ts](../src/lib/selection-copy.ts) 的 `cloneSelectionWithContext`；[markdown.ts](../src/lib/markdown.ts) 的 `serializeNodeAsBlock`、`serializeNodeAsInline`、`serializeBlockquote`。
 
-这是编排层，不应堆积过多具体序列化规则或复杂 DOM 细节。
+### 列表
 
-### `lib/content/message-root.ts`
+同一列表项内部的文字选区不补外层序号或项目符号；跨列表项或显式选择完整列表结构时保留层级。克隆有序列表时恢复首个选中项的原编号，序列化时按父项标记宽度缩进续行、子列表和代码块。
 
-负责从“官方复制按钮”反查到当前 assistant 消息的根节点。
+代码定位：[selection-copy.ts](../src/lib/selection-copy.ts) 的列表项边界判断及 `cloneSelectionWithContext`；[markdown.ts](../src/lib/markdown.ts) 的 `serializeList`、`getOrderedListItemNumbers`。
 
-它同时承担两类职责：
+### 代码
 
-- 正常路径下的消息根节点定位
-- 选择器失效时的调试日志输出
+默认开启“代码内复制不带反引号”。当两个选区端点位于同一个 `pre` 或行内 `code` 内时，直接复制 Range 的文字，保留原始空白；HTML 分支使用对应代码元素包裹文字。
 
-当前实现不是只依赖一个选择器，而是按多个结构线索回退匹配。这是适配 ChatGPT UI 变化的重要缓冲层。
+关闭设置，或选区跨出代码段时，进入通常的序列化流程，保留 Markdown 代码标记。代码块序列化负责提取正文、识别语言、过滤工具栏节点，并处理已有的 CodeMirror 等 DOM 结构。
 
-### `lib/markdown.ts`
+代码定位：[selection-copy.ts](../src/lib/selection-copy.ts) 的代码内选区分支；[markdown.ts](../src/lib/markdown.ts) 的 `serializePreBlock`、`serializeInlineCode` 及代码提取辅助函数。
 
-DOM 序列化模块，负责把消息或选区 DOM 序列化为 Markdown。选区复制通过 `serializeSelectionDomToMarkdown` 复用此模块；整条回复按钮仍使用官方输出。
+## 3. 公式与 Word 富文本复制
 
-当前支持的重点结构包括：
+选区只触及公式的一部分时，复制完整公式，不尝试反推任意子表达式。公式源码优先读取 KaTeX 的 `annotation[encoding="application/x-tex"]`，并兼容 `data-math-source` 等源码属性；行内公式输出 `$...$`，块级公式输出 `$$...$$`。
 
-- 段落
-- 标题
-- 无序 / 有序列表
-- 引用块
-- 代码块
-- 表格
-- 链接
-- 行内代码
-- 行内公式与块级公式
+同一次选区复制同时写入 `text/plain` 和 `text/html`：前者是 Markdown，后者用于富文本粘贴。HTML 中的公式用本地 KaTeX 转成独立 Presentation MathML，去掉依赖网页样式的 KaTeX 布局；转换失败则保留可见 LaTeX。粘贴目标及其粘贴选项决定采用哪种格式。
 
-这部分是最容易因修复一个场景而影响另一个场景的模块，后续修改需要格外关注回归风险。
+代码定位：[math.ts](../src/lib/math.ts) 的 `findMathCopyBoundary`、`extractLatexFromMathContainer`、`wrapLatexForMarkdown`；[selection-copy.ts](../src/lib/selection-copy.ts) 的 `expandRangeToFormulaBoundaries`、`replaceMathWithLatex`、`serializeFragmentHtml`；[clipboard-math.ts](../src/lib/clipboard-math.ts) 负责富文本公式转换。
 
-### `lib/math.ts`
+用户已反馈 Word 桌面版公式粘贴可用；自动化测试验证转换结构，不能代表所有 Office 版本的实际粘贴效果。上述富文本转换属于选区复制，整条回复按钮仍复用官方输出。
 
-负责整条回复复制与选区复制共用的数学公式 DOM 适配：
+## 4. 表格复制
 
-- 定位新版 `[data-math-source]` 包装、行内 `.katex` 与块级 `.katex-display` 边界
-- 优先从 `annotation[encoding="application/x-tex"]` 读取旧版 KaTeX 真值
-- 兼容新版 ChatGPT 的 `data-math-source`，并以 `data-tex`、`data-latex`、`data-math` 作为补充回退
-- 按行内 `$...$`、块级 `$$...$$` 生成 Markdown 公式文本
+表格按选区范围决定输出：
 
-### `lib/selection-copy.ts`
+| 选区 | 纯文本输出 |
+| --- | --- |
+| 一个单元格内部 | 单元格文本，不补表格或强调标记 |
+| 多个单元格或多行，不含表头 | Markdown 管道行，不虚构表头 |
+| 多行且包含真实表头 | 表头、分隔线和数据行 |
 
-负责恢复 ChatGPT 回复选区的 Markdown 格式：
+无表头管道行不保证被 Markdown 渲染器识别为表格。HTML 分支保留行列结构，添加内联边框、黑字白底，并通过底色和加粗区分表头，供 Word、Excel 等软件使用；Excel 的实际导入效果需手工验证。
 
-- 监听用户触发的同步 `copy` 事件
-- 将落在公式内部的选区端点扩展到完整公式边界
-- 补回共同祖先的格式外壳，不复制祖先的其他子节点；标题、加粗、链接、列表、引用与代码等格式可随局部选区保留
-- 同一列表项内部的文字选区不补 `li/ol/ul` 祖先，只保留文字格式；跨列表项或显式选择完整列表节点时保留编号和层级
-- 列表项按原 DOM 顺序输出段落、子列表及代码块，代码围栏和续行按父项编号宽度缩进
-- 单个单元格只输出文本；多个单元格或数据行输出管道行，仅在选中真实表头时添加表头分隔线。无表头的管道行不保证被 GFM 渲染为表格
-- 同次复制的 `text/html` 保留表格行列，并添加内联边框、黑字白底和表头底色/加粗，供 Word、Excel 等富文本粘贴使用；不影响 `text/plain` 中的 Markdown 或原页面。Office 实际粘贴尚未独立验证
-- HTML 中的公式使用本地 KaTeX 生成独立 Presentation MathML，并移除依赖网页 CSS 的 KaTeX 外壳；解析失败时输出可见 LaTeX 文本。Markdown 分支保持原格式，转换不请求远端服务
-- 无公式时，仅接管同一正文容器中的格式化内容；普通文字和可编辑区域保持原生复制
-- 在 `text/plain` 中输出 Markdown，在 `text/html` 中保留选区 DOM 和必要的格式上下文
+代码定位：[selection-copy.ts](../src/lib/selection-copy.ts) 的单元格判断、`serializeCellText`、`styleClipboardTables`；[markdown.ts](../src/lib/markdown.ts) 的 `serializeTable`。
 
-MathML 导入依据 [Microsoft 365 MathML 文档](https://learn.microsoft.com/en-us/office/math/mathml#mathml-in-html-import)。当前已核对实际网页只有 KaTeX HTML、无 MathML；自动化用例验证公式结构及 Markdown 不变。用户已确认更新 Edge 实际加载的开发目录后 Word 桌面版公式粘贴恢复正常；这不代表所有 Office 版本或 Excel 均已验证。
-- 普通文字、可编辑区域或缺失全部 LaTeX 源码时回退原生复制
+## 5. 单击选中行内代码
 
-### `lib/content/markdown-button.ts`
+默认开启。单击助手回复中的行内代码，使用 `Range.selectNodeContents()` 选中整段文字，不写入剪贴板。用户随后自行复制，复制时是否保留反引号由另一个独立设置决定。
 
-负责 Markdown 按钮自身的 UI 行为。
+事件委托自动覆盖新增回复。多行代码块、链接、交互控件、编辑区域、修饰键点击、拖动和已有非空选区不会触发全文选择。
 
-当前覆盖：
+代码定位：[inline-code-selection.ts](../src/lib/content/inline-code-selection.ts) 的 `installInlineCodeSelection`；初始化入口为 [content.ts](../src/entrypoints/content.ts)。
 
-- 按钮节点创建
-- 图标挂载
-- 状态切换
-- 样式注入
+## 6. 设置页与工具栏弹窗
 
-按钮状态目前分为：
+两个入口共用同一套 UI：每项一行名称、感叹号说明按钮和开关。点击感叹号展开说明；修改立即保存，成功不显示额外提示，失败显示错误信息。
 
-- `idle`
-- `loading`
-- `success`
-- `error`
+| 设置键 | 默认值 | 作用 |
+| --- | --- | --- |
+| `selectInlineCodeOnClick` | 开启 | 单击行内代码选中全文 |
+| `copyCodeWithoutMarkers` | 开启 | 同一代码段内复制省略反引号或围栏 |
 
-### `lib/content/tooltip.ts`
+设置使用 `chrome.storage.local` 保存在本机，通过 `storage.onChanged` 同步到已打开的页面。订阅先于初始读取，并通过修订计数避免旧读取结果覆盖新变更；删除设置恢复默认开启。
 
-负责 tooltip 的显示、隐藏、重定位和文案同步。
+代码定位：[popup.html](../src/entrypoints/popup.html)、[options.html](../src/entrypoints/options.html) 为入口；[page.ts](../src/lib/settings/page.ts) 和 [page.css](../src/lib/settings/page.css) 为共用界面；[storage.ts](../src/lib/settings/storage.ts) 管理键名及订阅。
 
-当前实现是一个轻量级 DOM tooltip，而不是依赖外部 UI 库。这样做是为了降低体积和维护成本，同时尽量贴近 ChatGPT 原生交互。
+## 7. 语言与静态资源
 
-### `lib/i18n.ts`
+回复按钮的文案由 i18next 加载，跟随 ChatGPT 页面的 `html lang`，语言变化后刷新按钮。浏览器扩展名称、描述使用浏览器要求的 `_locales` 目录。设置页目前按 `navigator.language` 选择内部的中英文文案，尚未合并到上述语言资源。
 
-负责扩展壳层（浏览器侧）文案读取：
+代码定位：[web-i18n.ts](../src/lib/web-i18n.ts)、[页面语言资源](../src/locales/web/)、[扩展语言资源](../src/public/_locales/)、[设置页文案](../src/lib/settings/page.ts)。[i18n.ts](../src/lib/i18n.ts) 保留浏览器文案读取封装。
 
-- 调用 `chrome.i18n.getMessage`
-- 用于 `manifest` 与未来扩展页（popup/options）文案场景
+扩展母图标位于 [src/assets/icon.png](../src/assets/icon.png)，构建时生成各尺寸图标；回复按钮图标位于 [md-copy-icons.svg](../src/lib/content/md-copy-icons.svg)。根目录 `assets/` 存放说明文档使用的截图与演示视频。
 
-### `lib/web-i18n.ts`
+## 8. 构建、测试与发布
 
-负责页面注入文案读取（与浏览器语言解耦）：
+[WXT 配置](../wxt.config.ts) 设置 `srcDir: 'src'`、`publicDir: 'src/public'`，自动发现入口并复制静态资源。权限包括 `clipboardWrite` 和 `storage`，目标站点为 `https://chatgpt.com/*`。后台入口目前没有业务逻辑。
 
-- 使用 `i18next` 加载 `src/locales/web/*.json`
-- 从 `html[lang]` 解析语言，并强制 `changeLanguage(...)`
-- 当前映射规则：`zh-* => zh_CN`，其余回退 `en`
-- 支持监听 `html lang` 变化后实时刷新已注入按钮文案
+构建插件将 JavaScript 产物中的 Unicode 非字符转为转义形式，避免扩展加载时出现“不是 UTF-8 编码格式”的错误。
 
-### `entrypoints/background.ts`
+| 命令 | 产物目录 |
+| --- | --- |
+| `pnpm build` | `.output/chrome-mv3` |
+| `pnpm build:edge` | `.output/edge-mv3` |
+| `pnpm build:edge:dev` | `.output/edge-mv3-dev` |
 
-当前没有核心业务逻辑，只保留最小背景脚本壳层，便于扩展能力时继续演进。
+应更新浏览器实际加载的目录，再重新加载扩展并刷新页面。持续开发服务与单次构建不要同时写入同一个输出目录。
 
-## 核心流程
+测试结构、运行命令和覆盖边界见 [测试说明](../tests/README.md)。Vitest 测试主要在本地 DOM 环境验证转换及交互，不替代真实网页、系统剪贴板或 Office 粘贴检查。
 
-一次完整复制流程如下：
+发布流程按标签构建、测试和生成 GitHub Release；稳定版继续上传 Edge 包并创建提审。提审成功不等于已上架。代码定位：[工作流目录](../.github/workflows/)、[publish-edge.mjs](../scripts/publish-edge.mjs)；操作说明见 [Edge 发布文档](edge-publishing.md)。
 
-1. 内容脚本在 `chatgpt.com` 页面注入
-2. 扫描官方复制按钮
-3. 识别哪些按钮属于 assistant 回复
-4. 隐藏原按钮，在同一位置并排插入原样复制与 Markdown 按钮
-5. 用户点击其中一个按钮，并锁定当前回复的复制操作
-6. 原样模式直接点击隐藏按钮并观察官方反馈；Markdown 模式在原按钮上派发桥接事件
-7. MAIN 脚本临时包装剪贴板写入方法并调用原按钮
-8. Markdown 模式修正行内公式，富文本写入仅修改 text/plain
-9. 原生 API 写入剪贴板，点击调用返回后立即恢复原方法
-10. 更新按钮状态，并通过 tooltip / 图标反馈结果
+## 排查入口
 
-其中最关键的两个步骤是：
+| 现象 | 优先检查 |
+| --- | --- |
+| 回复按钮缺失或重复 | 挂载扫描、官方按钮选择器、助手识别 |
+| 原样复制正常，Markdown 按钮失败 | MAIN 桥接与官方剪贴板调用时机 |
+| 选区多复制内容或丢失格式 | Range 边界、祖先补壳、对应 DOM 序列化规则 |
+| 公式 Markdown 正常，Word 异常 | HTML 剪贴板、MathML 转换及目标软件粘贴方式 |
+| 设置保存后不生效 | 本机设置订阅、实际加载目录及页面是否已更新内容脚本 |
 
-- 正确定位当前 assistant 消息
-- 捕获官方写入参数，并保留代码内容及其他 Markdown 格式
-
-选区复制是另一条独立且复用 DOM 序列化器的流程：
-
-1. 用户在页面中触发复制
-2. 内容脚本验证选区非空且不在可编辑区域
-3. 若端点位于公式内部，将克隆 Range 扩展到完整公式边界
-4. 克隆选区 DOM，补回共同祖先的格式外壳；仅公式扩展边界，其他内容不扩大选区
-5. 读取公式源码并替换公式渲染节点，交给 DOM 序列化器生成 Markdown；代码内容不进行全局空行压缩
-6. 同步写入 `text/plain` 与 `text/html`，阻止页面后续监听器覆盖结果
-7. 任一步无法安全完成时不取消事件，由浏览器执行原生复制
-
-## DOM 适配策略
-
-由于 ChatGPT 是 SPA，且页面结构会持续演化，当前实现采用以下策略：
-
-- 使用 `MutationObserver` 监听页面变化，而不是只在首次加载时扫描
-- 以官方复制按钮为锚点进行增强，而不是自行寻找整条消息挂载点
-- assistant 识别和消息根节点定位使用多条回退路径，而不是绑定单一 DOM 结构
-- 定位失败时输出调试日志，帮助后续快速修复选择器失效
-
-当前会用到的关键 DOM 线索包括：
-
-- `button[data-testid="copy-turn-action-button"]`
-- `section[data-turn="assistant"]`
-- `[data-message-author-role="assistant"]`
-- `.markdown.prose`
-- `article`
-- `.agent-turn`
-- `div.group`
-
-这些选择器不是稳定协议，只是当前版本下的经验路径。后续如果 ChatGPT UI 变化，优先考虑增加兼容分支，而不是立即替换掉旧逻辑。
-
-## Markdown 序列化策略
-
-以下描述选区复制复用的 DOM 序列化器；整条回复按钮使用 `official-markdown.ts`，不走此流程。官方文本转换保守跳过围栏代码、缩进代码和反引号代码片段，只转换同一行内配对且不含美元符号或反引号的公式。
-
-### 正文区域提取
-
-序列化前会先尝试定位正文区域，避免把按钮、工具栏等 UI 区域带入结果。
-
-当前优先顺序大致是：
-
-1. `.markdown.prose`
-2. `article` 内的 `.markdown.prose`
-3. `article`
-4. 整个消息根节点
-
-### 数学公式
-
-数学公式是当前最重要的兼容场景。
-
-实现原则：
-
-- 不直接信任屏幕上可见文本
-- 优先从 KaTeX 的 `annotation[encoding="application/x-tex"]` 中读取 LaTeX 真值
-- 行内公式输出为 `$...$`
-- 块级公式输出为 `$$ ... $$`
-
-这样可以避免复制结果丢失公式界定符，或把渲染后的视觉文本错误当作源文本。
-
-### 代码块
-
-代码块是第二优先级场景。
-
-当前实现重点处理了以下问题：
-
-- 尽量保留原始换行
-- 尽量识别 fenced code block 的语言标签
-- 优先从 ChatGPT 当前代码块结构中恢复代码正文
-- 过滤代码块内部的按钮、图标等 UI 节点
-- 避免语言标签被错误拼入代码正文开头
-
-由于 ChatGPT 代码块结构可能随编辑器实现调整而变化，这部分后续需要持续关注。
-
-### 其他结构
-
-当前还支持常见 Markdown 结构的基础转换：
-
-- 标题
-- 列表
-- 引用块
-- 表格
-- 链接
-- 行内代码
-
-表格目前按 GFM 形式输出。
-
-## 扩展配置
-
-项目使用 WXT 构建。
-
-构建目录取决于浏览器和模式：`pnpm build` 更新 `.output/chrome-mv3`；`pnpm build:edge` 更新 `.output/edge-mv3`；`pnpm build:edge:dev` 单次更新 `.output/edge-mv3-dev`。如果 Edge 加载的是开发目录而开发服务已停止，仅运行默认 build 不会更新已加载的扩展。构建后应在扩展管理页重新加载，并刷新 ChatGPT 页面。
-
-当前关键配置位于 [`wxt.config.ts`](../wxt.config.ts)：
-
-- `default_locale`: `en`
-- `name`: `__MSG_extName__`
-- `description`: `__MSG_extDescription__`
-- `host_permissions`: `https://chatgpt.com/*`
-- `permissions`: `clipboardWrite`
-- `web_accessible_resources`: 暴露 `md-copy-main.svg` 与 `md-copy-check.svg`
-
-图标资源由内容脚本通过 `chrome.runtime.getURL(...)` 获取，因此资源路径和配置需保持同步。
-
-## 当前已知边界
-
-当前实现有一些明确边界：
-
-- 主要面向 assistant 回复，不处理 user 消息
-- 依赖 ChatGPT 当前 DOM 结构，不保证对历史或实验性 UI 100% 通用
-- Markdown 按钮依赖官方在点击同步调用内发起剪贴板写入；提前绑定原函数、异步发起写入及旧式 execCommand 路径均可能无法捕获。原样复制不受此限制，其成功反馈依据官方 UI，不是读取系统剪贴板验证
-- 公式选区复制已建立 DOM 单元测试；真实系统剪贴板仍需通过 Edge / Chrome 手工回归
-- 公式选区复制只处理浏览器当前的单 Range 选区
-- 公式同时缺少 annotation 与 `data-math-source` 等源码属性时不会猜测或执行 OCR，而是回退原生复制
-
-## 后续维护建议
-
-### 当按钮不显示时
-
-优先检查：
-
-- 官方复制按钮选择器是否变化
-- assistant 消息结构是否变化
-- `MutationObserver` 是否仍能覆盖页面更新场景
-
-### 当复制结果错误时
-
-优先判断问题属于哪一层：
-
-- 消息根节点找错了
-- 正文区域提取不对
-- 某类 DOM 结构的序列化规则失效
-- ChatGPT 渲染结构发生变化
-
-### 当准备改动序列化器时
-
-建议至少回归以下内容：
-
-- 行内公式
-- 块级公式
-- 带语言标记的代码块
-- 表格
-- 链接
-- 列表
-- 引用块
-
-## 文档维护约定
-
-如果以下内容发生变化，应同步更新本文件：
-
-- 模块职责调整
-- 核心复制流程变化
-- DOM 适配策略变化
-- 构建配置或权限变化
-- 明确新增的重要边界或风险点
-
-本文档的目标不是记录每一行实现细节，而是帮助维护者快速理解：
-
-- 这个项目现在是怎么工作的
-- 哪些模块最关键
-- 后续问题最可能出在哪
-- 改动时应该优先注意什么
+修改功能时同步维护对应小节及代码链接；验证记录和版本变更分别放在测试说明、CHANGELOG 中，避免本文变成历史操作记录。

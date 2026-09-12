@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeOfficialMarkdown } from '../lib/official-markdown';
+import { normalizeOfficialMarkdown } from '../src/lib/official-markdown';
 
 describe('官方 Markdown 行内公式修正', () => {
   it('转换用户示例中的多个行内公式，保留其余文字', () => {

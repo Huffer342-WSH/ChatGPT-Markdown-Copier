@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 本文件运行真实按钮挂载及点击流程，仅替代本地化初始化和 WXT 入口包装。
-vi.mock('../lib/web-i18n', () => ({
+vi.mock('../src/lib/web-i18n', () => ({
   initWebI18n: async () => {},
   syncWebLanguageFromHtml: async () => {},
   tWeb: (_key: string, fallback: string) => fallback,
@@ -30,7 +30,7 @@ beforeEach(async () => {
   windowListeners = vi.spyOn(window, 'addEventListener');
   document.body.innerHTML = '<section data-turn="assistant"><button data-testid="copy-turn-action-button" aria-label="复制回复"><svg></svg></button></section>';
   official = document.querySelector('button')!;
-  const entry = await import('../entrypoints/content');
+  const entry = await import('../src/entrypoints/content');
   entry.default.main({} as never);
   document.dispatchEvent(new Event('DOMContentLoaded'));
   await Promise.resolve();

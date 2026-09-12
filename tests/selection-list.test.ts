@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import html from './fixtures/structured-list.html?raw';
 import expected from './fixtures/structured-list.md?raw';
-import { createMathSelectionClipboardPayload } from '../lib/selection-copy';
+import { createMathSelectionClipboardPayload } from '../src/lib/selection-copy';
 
 beforeEach(() => { document.body.innerHTML = html; });
 afterEach(() => {
@@ -106,9 +106,9 @@ describe('Edge 真实 DOM 精简样本：嵌套列表选区复制', () => {
     expect(copyRange(first, last, 2, 1)?.textPlain).toBe('1. \n   - 子项\n   - **粗**');
   });
 
-  it('单项中的行内代码保留反引号，不附加外层序号', () => {
+  it('单项中的行内代码默认不带反引号和外层序号', () => {
     const code = document.querySelector('code')!.firstChild!;
-    expect(copyRange(code, code, 1, 3)?.textPlain).toBe('`内代`');
+    expect(copyRange(code, code, 1, 3)?.textPlain).toBe('内代');
   });
 });
 

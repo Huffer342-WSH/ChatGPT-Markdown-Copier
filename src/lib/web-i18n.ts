@@ -5,8 +5,8 @@
 
 import i18next from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import enMessages from '../src/locales/web/en.json';
-import zhCnMessages from '../src/locales/web/zh_CN.json';
+import enMessages from '../locales/web/en.json';
+import zhCnMessages from '../locales/web/zh_CN.json';
 
 export type WebLocale = 'en' | 'zh_CN';
 

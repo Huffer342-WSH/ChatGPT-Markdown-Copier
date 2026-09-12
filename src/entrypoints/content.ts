@@ -12,6 +12,7 @@ import {
 } from '../lib/content/markdown-button';
 import { isAssistantTurnButton } from '../lib/content/message-root';
 import { installMathSelectionCopy } from '../lib/selection-copy';
+import { installInlineCodeSelection } from '../lib/content/inline-code-selection';
 import { initWebI18n, syncWebLanguageFromHtml } from '../lib/web-i18n';
 
 const ENHANCED_ATTR = 'data-md-copy-enhanced';
@@ -23,6 +24,7 @@ export default defineContentScript({
   runAt: 'document_start',
   main() {
     installMathSelectionCopy();
+    installInlineCodeSelection();
     runBootstrapWhenDocumentReady();
   },
 });
