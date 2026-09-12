@@ -5,16 +5,25 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+    inputs:
+      live_browser:
+        description: '同时运行真实 ChatGPT 浏览器测试'
+        type: boolean
+        default: false
+  schedule:
+    # 每周日 02:23 UTC（北京时间 10:23）运行真实站点测试。
+    - cron: '23 2 * * 0'
 
 permissions:
   contents: read
 
 concurrency:
-  group: tests-${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -29,3 +38,29 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm compile
       - run: pnpm test:ci
+
+  live-browser:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.live_browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.14.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec wxt build
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chatgpt-compatibility-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

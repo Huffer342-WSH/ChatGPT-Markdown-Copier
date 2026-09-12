@@ -1,6 +1,6 @@
 # 测试与持续测试
 
-所有自动化测试集中在 `tests/`，由根目录 `vitest.config.ts` 收集。
+所有自动化测试集中在 `tests/`。离线单元测试由根目录 `vitest.config.ts` 收集；真实 ChatGPT 浏览器测试由 `playwright.config.ts` 独立收集，运行方式与边界见 [e2e/README.md](e2e/README.md)。
 
 ```powershell
 pnpm test        # 单次运行
