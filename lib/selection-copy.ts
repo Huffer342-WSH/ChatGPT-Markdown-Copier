@@ -61,7 +61,7 @@ export function handleMathSelectionCopy(event: ClipboardEvent): void {
 }
 
 /**
- * 根据选区生成 Markdown；无公式时仅接管同一回复正文内的格式化内容。
+ * 根据选区生成 Markdown；同一代码块内部输出原始代码，无公式时仅接管回复正文内的格式化内容。
  *
  * @param {Selection} selection 浏览器当前选区。
  * @returns {MathSelectionClipboardPayload | null}
@@ -74,6 +74,15 @@ export function createMathSelectionClipboardPayload(
   const sourceRange = selection.getRangeAt(0);
   if (isEditableNode(sourceRange.startContainer) || isEditableNode(sourceRange.endContainer)) {
     return null;
+  }
+
+  // 同一代码块内部只复制选中的代码，保留原始空白，不生成 Markdown 围栏。
+  const startPre = getContainingElement(sourceRange.startContainer)?.closest('pre');
+  const endPre = getContainingElement(sourceRange.endContainer)?.closest('pre');
+  if (startPre && startPre === endPre && startPre.closest(CONTENT_SELECTOR)) {
+    const code = document.createElement('pre');
+    code.textContent = sourceRange.toString();
+    return { textPlain: code.textContent, textHtml: code.outerHTML };
   }
 
   const expandedRange = sourceRange.cloneRange();
